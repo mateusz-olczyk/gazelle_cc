@@ -18,29 +18,39 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 )
 
-func prequalifyToken(data []byte, noMoreData bool) TokenType {
-	if len(data) == 0 {
+type dataChunk struct {
+	data     []byte // chunk of the data to be tokenized, may be too short to form a complete token
+	complete bool   // whether there is no more data to be read after this chunk
+}
+
+func (ch dataChunk) String() string {
+	return fmt.Sprintf("dataChunk{data: %q, complete: %v}", ch.data, ch.complete)
+}
+
+func prequalifyToken(ch dataChunk) TokenType {
+	if len(ch.data) == 0 {
 		return TokenType_Incomplete
 	}
 
-	switch data[0] {
+	switch ch.data[0] {
 	case '\t', '\n', '\v', '\f', '\r', ' ':
 		return TokenType_Whitespace
 	case '/':
-		if len(data) > 1 && data[1] == '/' {
+		if len(ch.data) > 1 && ch.data[1] == '/' {
 			return TokenType_SingleLineComment
-		} else if len(data) > 1 && data[1] == '*' {
+		} else if len(ch.data) > 1 && ch.data[1] == '*' {
 			return TokenType_MultiLineComment
 		}
 	case '"':
 		return TokenType_StringLiteral
 	case 'R':
-		if len(data) > 1 && data[1] == '"' {
+		if len(ch.data) > 1 && ch.data[1] == '"' {
 			return TokenType_RawStringLiteral
-		} else if len(data) > 1 || noMoreData {
+		} else if len(ch.data) > 1 || ch.complete {
 			return TokenType_Word
 		}
 	case '(', ')', '[', ']', '{', '}', ',', ';', '#', '<', '>', '=', '!':
@@ -52,64 +62,59 @@ func prequalifyToken(data []byte, noMoreData bool) TokenType {
 	return TokenType_Incomplete
 }
 
-func extractWordToken(data []byte, noMoreData bool) []byte {
-	for i := 1; i < len(data); i++ {
-		if prequalifyToken(data[i:], noMoreData) != TokenType_Word {
-			return data[:i]
+// applicable for tokens where one character class is repeated one or more times (like in regex "[abc]+")
+func extractSimpleTokenWithDynamicLength(ch dataChunk, t TokenType) []byte {
+	for i := 1; i < len(ch.data); i++ {
+		if prequalifyToken(dataChunk{ch.data[i:], ch.complete}) != t {
+			return ch.data[:i]
 		}
 	}
 
-	if noMoreData {
-		return data
+	if ch.complete {
+		return ch.data
+	} else {
+		return nil
+	}
+}
+
+func extractWordToken(ch dataChunk) []byte {
+	return extractSimpleTokenWithDynamicLength(ch, TokenType_Word)
+}
+
+func extractWhitespaceToken(ch dataChunk) []byte {
+	return extractSimpleTokenWithDynamicLength(ch, TokenType_Whitespace)
+}
+
+func extractSingleLineCommentToken(ch dataChunk) []byte {
+	if newlineIndex := bytes.IndexAny(ch.data, "\r\n"); newlineIndex >= 0 {
+		return ch.data[:newlineIndex]
+	}
+
+	if ch.complete {
+		return ch.data
 	}
 
 	return nil
 }
 
-func extractWhitespaceToken(data []byte, noMoreData bool) []byte {
-	for i := 1; i < len(data); i++ {
-		if prequalifyToken(data[i:], noMoreData) != TokenType_Whitespace {
-			return data[:i]
-		}
+func extractMultiLineCommentToken(ch dataChunk) ([]byte, error) {
+	if endIndex := bytes.Index(ch.data, []byte("*/")); endIndex >= 0 {
+		return ch.data[:endIndex+2], nil
 	}
 
-	if noMoreData {
-		return data
-	}
-
-	return nil
-}
-
-func extractSingleLineCommentToken(data []byte, noMoreData bool) []byte {
-	if newlineIndex := bytes.IndexAny(data, "\r\n"); newlineIndex >= 0 {
-		return data[:newlineIndex]
-	}
-
-	if noMoreData {
-		return data
-	}
-
-	return nil
-}
-
-func extractMultiLineCommentToken(data []byte, noMoreData bool) ([]byte, error) {
-	if endIndex := bytes.Index(data, []byte("*/")); endIndex >= 0 {
-		return data[:endIndex+2], nil
-	}
-
-	if noMoreData {
+	if ch.complete {
 		return nil, errors.New("unterminated multi-line comment")
 	}
 
 	return nil, nil
 }
 
-func extractStringLiteralToken(data []byte, noMoreData bool) ([]byte, error) {
+func extractStringLiteralToken(ch dataChunk) ([]byte, error) {
 	start := 1
 	for {
-		relIndex := bytes.IndexByte(data[start:], '"')
+		relIndex := bytes.IndexByte(ch.data[start:], '"')
 		if relIndex < 0 {
-			if noMoreData {
+			if ch.complete {
 				return nil, errors.New("unterminated string literal")
 			} else {
 				return nil, nil
@@ -117,84 +122,80 @@ func extractStringLiteralToken(data []byte, noMoreData bool) ([]byte, error) {
 		}
 
 		absIndex := start + relIndex
-		if data[absIndex-1] != '\\' || data[absIndex-2] == '\\' {
-			return data[:absIndex+1], nil
+		if ch.data[absIndex-1] != '\\' || ch.data[absIndex-2] == '\\' {
+			return ch.data[:absIndex+1], nil
 		}
 
 		start = absIndex + 1
 	}
 }
 
-func extractRawStringLiteralToken(data []byte, noMoreData bool) ([]byte, error) {
-	startIndex := bytes.IndexByte(data, '(')
-	if startIndex < 0 {
-		if noMoreData {
+func extractRawStringLiteralToken(ch dataChunk) ([]byte, error) {
+	start := bytes.IndexByte(ch.data, '(')
+	if start < 0 {
+		if ch.complete {
 			return nil, errors.New("missing opening delimiter '(' in raw string literal")
 		} else {
 			return nil, nil
 		}
 	}
 
-	customDelimiter := data[2:startIndex]
-	endDelimiter := make([]byte, 0, len(customDelimiter)+2)
+	customDelimiterName := ch.data[2:start]
+	endDelimiter := make([]byte, 0, len(customDelimiterName)+len(`)"`))
 	endDelimiter = append(endDelimiter, ')')
-	endDelimiter = append(endDelimiter, customDelimiter...)
+	endDelimiter = append(endDelimiter, customDelimiterName...)
 	endDelimiter = append(endDelimiter, '"')
 
-	endIndex := bytes.Index(data, endDelimiter)
+	endIndex := bytes.Index(ch.data, endDelimiter)
 	if endIndex < 0 {
-		if noMoreData {
+		if ch.complete {
 			return nil, errors.New("unterminated raw string literal")
 		} else {
 			return nil, nil
 		}
 	}
 
-	return data[:endIndex+len(endDelimiter)], nil
+	return ch.data[:endIndex+len(endDelimiter)], nil
 }
 
-func extractSeparatorToken(data []byte, noMoreData bool) []byte {
-	if len(data) == 0 {
-		return nil
-	}
-
-	switch data[0] {
+func extractSeparatorToken(ch dataChunk) []byte {
+	switch ch.data[0] {
 	case '(', ')', '[', ']', '{', '}', ',', ';', '#':
-		return data[:1]
+		return ch.data[:1]
 	case '<', '>', '=', '!':
-		if len(data) > 1 && data[1] == '=' {
-			return data[:2]
-		} else if len(data) > 1 || noMoreData {
-			return data[:1]
+		if len(ch.data) > 1 && ch.data[1] == '=' {
+			return ch.data[:2]
+		} else if len(ch.data) > 1 || ch.complete {
+			return ch.data[:1]
 		}
 	}
 
 	return nil
 }
 
-func extractToken(data []byte, noMoreData bool, t TokenType) ([]byte, error) {
-	switch t {
+func extractToken(ch dataChunk) ([]byte, error) {
+	switch prequalifyToken(ch) {
 	case TokenType_Word:
-		return extractWordToken(data, noMoreData), nil
+		return extractWordToken(ch), nil
 	case TokenType_Whitespace:
-		return extractWhitespaceToken(data, noMoreData), nil
+		return extractWhitespaceToken(ch), nil
 	case TokenType_SingleLineComment:
-		return extractSingleLineCommentToken(data, noMoreData), nil
+		return extractSingleLineCommentToken(ch), nil
 	case TokenType_MultiLineComment:
-		return extractMultiLineCommentToken(data, noMoreData)
+		return extractMultiLineCommentToken(ch)
 	case TokenType_StringLiteral:
-		return extractStringLiteralToken(data, noMoreData)
+		return extractStringLiteralToken(ch)
 	case TokenType_RawStringLiteral:
-		return extractRawStringLiteralToken(data, noMoreData)
+		return extractRawStringLiteralToken(ch)
 	case TokenType_Separator:
-		return extractSeparatorToken(data, noMoreData), nil
+		return extractSeparatorToken(ch), nil
 	}
 
 	return nil, nil
 }
 
 func tokenizer(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	token, err = extractToken(data, atEOF, prequalifyToken(data, atEOF))
+	token, err = extractToken(dataChunk{data, atEOF})
 	advance = len(token)
 	return
 }

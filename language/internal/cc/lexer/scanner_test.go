@@ -22,351 +22,299 @@ import (
 
 func TestPrequalifyToken(t *testing.T) {
 	testCases := []struct {
-		input      string
-		noMoreData bool
-		expected   TokenType
+		input    dataChunk
+		expected TokenType
 	}{
 		{
-			input:      "",
-			noMoreData: true,
-			expected:   TokenType_Incomplete,
+			input:    dataChunk{data: []byte("")},
+			expected: TokenType_Incomplete,
 		},
 		{
-			input:      " (",
-			noMoreData: true,
-			expected:   TokenType_Whitespace,
+			input:    dataChunk{data: []byte(" (")},
+			expected: TokenType_Whitespace,
 		},
 		{
-			input:      "    \n",
-			noMoreData: false,
-			expected:   TokenType_Whitespace,
+			input:    dataChunk{data: []byte("    \n")},
+			expected: TokenType_Whitespace,
 		},
 		{
-			input:      "    \n",
-			noMoreData: true,
-			expected:   TokenType_Whitespace,
+			input:    dataChunk{data: []byte("    \n")},
+			expected: TokenType_Whitespace,
 		},
 		{
-			input:      "\"string",
-			noMoreData: true,
-			expected:   TokenType_StringLiteral,
+			input:    dataChunk{data: []byte(`"string`)},
+			expected: TokenType_StringLiteral,
 		},
 		{
-			input:      "R\"(raw string",
-			noMoreData: true,
-			expected:   TokenType_RawStringLiteral,
+			input:    dataChunk{data: []byte(`R"(raw string`)},
+			expected: TokenType_RawStringLiteral,
 		},
 		{
 			// 'R' could be the start of a raw string literal, or it could be a word. We need more data to decide.
-			input:      "R",
-			noMoreData: false,
-			expected:   TokenType_Incomplete,
+			input:    dataChunk{data: []byte("R"), complete: false},
+			expected: TokenType_Incomplete,
 		},
 		{
-			input:      "R",
-			noMoreData: true,
-			expected:   TokenType_Word,
+			input:    dataChunk{data: []byte("R"), complete: true},
+			expected: TokenType_Word,
 		},
 		{
-			input:      "RR",
-			noMoreData: true,
-			expected:   TokenType_Word,
+			input:    dataChunk{data: []byte("RR")},
+			expected: TokenType_Word,
 		},
 		{
-			input:      "// single line comment",
-			noMoreData: true,
-			expected:   TokenType_SingleLineComment,
+			input:    dataChunk{data: []byte("// single line comment")},
+			expected: TokenType_SingleLineComment,
 		},
 		{
-			input:      "/* multi line comment",
-			noMoreData: true,
-			expected:   TokenType_MultiLineComment,
+			input:    dataChunk{data: []byte("/* multi line comment")},
+			expected: TokenType_MultiLineComment,
 		},
 		{
-			input:      "/",
-			noMoreData: false,
-			expected:   TokenType_Incomplete,
+			input:    dataChunk{data: []byte("/")},
+			expected: TokenType_Incomplete,
 		},
 		{
-			input:      "<iostream>",
-			noMoreData: true,
-			expected:   TokenType_Separator,
+			input:    dataChunk{data: []byte("<iostream>")},
+			expected: TokenType_Separator,
 		},
 		{
-			input:      "int main()",
-			noMoreData: true,
-			expected:   TokenType_Word,
+			input:    dataChunk{data: []byte("int main()")},
+			expected: TokenType_Word,
 		},
 	}
 
 	for _, tc := range testCases {
-		result := prequalifyToken([]byte(tc.input), tc.noMoreData)
-		assert.Equal(t, tc.expected, result, "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+		result := prequalifyToken(tc.input)
+		assert.Equal(t, tc.expected, result, "Input: %v", tc.input)
 	}
 }
 
 func TestExtractWordToken(t *testing.T) {
 	testCases := []struct {
-		input      string
-		noMoreData bool
-		expected   string
+		input    dataChunk
+		expected []byte
 	}{
 		{
-			input:      "identifier123;",
-			noMoreData: true,
-			expected:   "identifier123",
+			input:    dataChunk{data: []byte("identifier123;"), complete: true},
+			expected: []byte("identifier123"),
 		},
 		{
-			input:      "identifier123",
-			noMoreData: true,
-			expected:   "identifier123",
+			input:    dataChunk{data: []byte("identifier123"), complete: true},
+			expected: []byte("identifier123"),
 		},
 		{
-			input:      "identifier123",
-			noMoreData: false,
-			expected:   "",
+			input:    dataChunk{data: []byte("identifier123"), complete: false},
+			expected: nil,
 		},
 	}
 
 	for _, tc := range testCases {
-		result := extractWordToken([]byte(tc.input), tc.noMoreData)
-		assert.Equal(t, tc.expected, string(result), "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+		result := extractWordToken(tc.input)
+		assert.Equal(t, tc.expected, result, "Input: %v", tc.input)
 	}
 }
 
 func TestExtractWhitespaceToken(t *testing.T) {
 	testCases := []struct {
-		input      string
-		noMoreData bool
-		expected   string
+		input    dataChunk
+		expected []byte
 	}{
 		{
-			input:      "   \n\t  identifier",
-			noMoreData: true,
-			expected:   "   \n\t  ",
+			input:    dataChunk{data: []byte("   \n\t  identifier"), complete: true},
+			expected: []byte("   \n\t  "),
 		},
 		{
-			input:      "   \n\t  ",
-			noMoreData: true,
-			expected:   "   \n\t  ",
+			input:    dataChunk{data: []byte("   \n\t  "), complete: true},
+			expected: []byte("   \n\t  "),
 		},
 		{
-			input:      "   \n\t  ",
-			noMoreData: false,
-			expected:   "",
+			input:    dataChunk{data: []byte("   \n\t  "), complete: false},
+			expected: nil,
 		},
 	}
 
 	for _, tc := range testCases {
-		result := extractWhitespaceToken([]byte(tc.input), tc.noMoreData)
-		assert.Equal(t, tc.expected, string(result), "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+		result := extractWhitespaceToken(tc.input)
+		assert.Equal(t, tc.expected, result, "Input: %v", tc.input)
 	}
 }
 
 func TestExtractSingleLineCommentToken(t *testing.T) {
 	testCases := []struct {
-		input      string
-		noMoreData bool
-		expected   string
+		input    dataChunk
+		expected []byte
 	}{
 		{
-			input:      "// This is a single line comment\nint main()",
-			noMoreData: true,
-			expected:   "// This is a single line comment",
+			input:    dataChunk{data: []byte("// This is a single line comment\nint main()"), complete: true},
+			expected: []byte("// This is a single line comment"),
 		},
 		{
-			input:      "// This is a single line comment",
-			noMoreData: true,
-			expected:   "// This is a single line comment",
+			input:    dataChunk{data: []byte("// This is a single line comment"), complete: true},
+			expected: []byte("// This is a single line comment"),
 		},
 		{
-			input:      "// This is a single line comment",
-			noMoreData: false,
-			expected:   "",
+			input:    dataChunk{data: []byte("// This is a single line comment"), complete: false},
+			expected: nil,
 		},
 	}
 
 	for _, tc := range testCases {
-		result := extractSingleLineCommentToken([]byte(tc.input), tc.noMoreData)
-		assert.Equal(t, tc.expected, string(result), "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+		result := extractSingleLineCommentToken(tc.input)
+		assert.Equal(t, tc.expected, result, "Input: %v", tc.input)
 	}
 }
 
 func TestExtractMultiLineCommentToken(t *testing.T) {
 	testCases := []struct {
-		input       string
-		noMoreData  bool
-		expected    string
-		expectedErr string
+		input         dataChunk
+		expectedOk    []byte
+		expectedError string
 	}{
 		{
-			input:      "/* This is a multi line comment */\nint main()",
-			noMoreData: true,
-			expected:   "/* This is a multi line comment */",
+			input:      dataChunk{data: []byte("/* This is a multi line comment */\nint main()"), complete: true},
+			expectedOk: []byte("/* This is a multi line comment */"),
 		},
 		{
-			input:       "/* This is a multi line comment",
-			noMoreData:  true,
-			expectedErr: "unterminated multi-line comment",
+			input:         dataChunk{data: []byte("/* This is a multi line comment"), complete: true},
+			expectedError: "unterminated multi-line comment",
 		},
 		{
-			input:      "/* This is a multi line comment",
-			noMoreData: false,
-			expected:   "",
+			input:      dataChunk{data: []byte("/* This is a multi line comment"), complete: false},
+			expectedOk: nil,
 		},
 	}
 
 	for _, tc := range testCases {
-		result, err := extractMultiLineCommentToken([]byte(tc.input), tc.noMoreData)
-		assert.Equal(t, tc.expected, string(result), "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
-		if tc.expectedErr == "" {
-			assert.NoError(t, err, "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+		result, err := extractMultiLineCommentToken(tc.input)
+		assert.Equal(t, tc.expectedOk, result, "Input: %v", tc.input)
+		if tc.expectedError == "" {
+			assert.NoError(t, err, "Input: %v", tc.input)
 		} else {
-			assert.EqualError(t, err, tc.expectedErr, "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+			assert.EqualError(t, err, tc.expectedError, "Input: %v", tc.input)
 		}
 	}
 }
 
 func TestExtractStringLiteralToken(t *testing.T) {
 	testCases := []struct {
-		input       string
-		noMoreData  bool
-		expected    string
-		expectedErr string
+		input         dataChunk
+		expectedOk    []byte
+		expectedError string
 	}{
 		{
-			input:      `""`,
-			noMoreData: true,
-			expected:   `""`,
+			input:      dataChunk{data: []byte(`""`), complete: true},
+			expectedOk: []byte(`""`),
 		},
 		{
-			input:      `"\""`,
-			noMoreData: true,
-			expected:   `"\""`,
+			input:      dataChunk{data: []byte(`"\""`), complete: true},
+			expectedOk: []byte(`"\""`),
 		},
 		{
-			input:      `"This is a string literal"`,
-			noMoreData: true,
-			expected:   `"This is a string literal"`,
+			input:      dataChunk{data: []byte(`"This is a string literal"`), complete: true},
+			expectedOk: []byte(`"This is a string literal"`),
 		},
 		{
-			input:      `"This is a string with an escaped quote: \" inside"`,
-			noMoreData: true,
-			expected:   `"This is a string with an escaped quote: \" inside"`,
+			input:      dataChunk{data: []byte(`"This is a string with an escaped quote: \" inside"`), complete: true},
+			expectedOk: []byte(`"This is a string with an escaped quote: \" inside"`),
 		},
 		{
-			input:      `"This is an unterminated string literal`,
-			noMoreData: false,
-			expected:   "",
+			input:      dataChunk{data: []byte(`"This is an unterminated string literal`), complete: false},
+			expectedOk: nil,
 		},
 		{
-			input:       `"This is an unterminated string literal`,
-			noMoreData:  true,
-			expectedErr: "unterminated string literal",
+			input:         dataChunk{data: []byte(`"This is an unterminated string literal`), complete: true},
+			expectedError: "unterminated string literal",
 		},
 		{
-			input:      `"Escaped backslash \\"; "different string"`,
-			noMoreData: true,
-			expected:   `"Escaped backslash \\"`,
+			input:      dataChunk{data: []byte(`"Escaped backslash \\"; "different string"`), complete: true},
+			expectedOk: []byte(`"Escaped backslash \\"`),
 		},
 	}
 
 	for _, tc := range testCases {
-		result, err := extractStringLiteralToken([]byte(tc.input), tc.noMoreData)
-		assert.Equal(t, tc.expected, string(result), "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
-		if tc.expectedErr == "" {
-			assert.NoError(t, err, "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+		result, err := extractStringLiteralToken(tc.input)
+		assert.Equal(t, tc.expectedOk, result, "Input: %v", tc.input)
+		if tc.expectedError == "" {
+			assert.NoError(t, err, "Input: %v", tc.input)
 		} else {
-			assert.EqualError(t, err, tc.expectedErr, "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+			assert.EqualError(t, err, tc.expectedError, "Input: %v", tc.input)
 		}
 	}
 }
 
 func TestExtractRawStringLiteralToken(t *testing.T) {
 	testCases := []struct {
-		input       string
-		noMoreData  bool
-		expected    string
-		expectedErr string
+		input         dataChunk
+		expectedOk    []byte
+		expectedError string
 	}{
 		{
-			input:      `R"()"`,
-			noMoreData: true,
-			expected:   `R"()"`,
+			input:      dataChunk{data: []byte(`R"()"`), complete: true},
+			expectedOk: []byte(`R"()"`),
 		},
 		{
-			input:      `R"delim(This is a raw string with a custom delimiter)delim"`,
-			noMoreData: true,
-			expected:   `R"delim(This is a raw string with a custom delimiter)delim"`,
+			input:      dataChunk{data: []byte(`R"delim(This is a raw string with a custom delimiter)delim"`), complete: true},
+			expectedOk: []byte(`R"delim(This is a raw string with a custom delimiter)delim"`),
 		},
 		{
-			input:       `R"(This is an unterminated raw string literal`,
-			noMoreData:  true,
-			expectedErr: "unterminated raw string literal",
+			input:         dataChunk{data: []byte(`R"(This is an unterminated raw string literal`), complete: true},
+			expectedError: "unterminated raw string literal",
 		},
 		{
-			input:      `R"(This is an unterminated raw string literal`,
-			noMoreData: false,
-			expected:   "",
+			input:      dataChunk{data: []byte(`R"(This is an unterminated raw string literal`), complete: false},
+			expectedOk: nil,
 		},
 		{
-			input:       `R"delim(This is an unterminated raw string literal)`,
-			noMoreData:  true,
-			expectedErr: "unterminated raw string literal",
+			input:         dataChunk{data: []byte(`R"delim(This is an unterminated raw string literal)`), complete: true},
+			expectedError: "unterminated raw string literal",
 		},
 		{
-			input:      `R"delim(This is an unterminated raw string literal)`,
-			noMoreData: false,
-			expected:   "",
+			input:      dataChunk{data: []byte(`R"delim(This is an unterminated raw string literal)`), complete: false},
+			expectedOk: nil,
 		},
 		{
-			input:       `R"Missing parenthesis"`,
-			noMoreData:  true,
-			expectedErr: "missing opening delimiter '(' in raw string literal",
+			input:         dataChunk{data: []byte(`R"Missing parenthesis"`), complete: true},
+			expectedError: "missing opening delimiter '(' in raw string literal",
 		},
 	}
 
 	for _, tc := range testCases {
-		result, err := extractRawStringLiteralToken([]byte(tc.input), tc.noMoreData)
-		assert.Equal(t, tc.expected, string(result), "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
-		if tc.expectedErr == "" {
-			assert.NoError(t, err, "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+		result, err := extractRawStringLiteralToken(tc.input)
+		assert.Equal(t, tc.expectedOk, result, "Input: %v", tc.input)
+		if tc.expectedError == "" {
+			assert.NoError(t, err, "Input: %v", tc.input)
 		} else {
-			assert.EqualError(t, err, tc.expectedErr, "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+			assert.EqualError(t, err, tc.expectedError, "Input: %v", tc.input)
 		}
 	}
 }
 
 func TestExtractSeparatorToken(t *testing.T) {
 	testCases := []struct {
-		input      string
-		noMoreData bool
-		expected   string
+		input    dataChunk
+		expected []byte
 	}{
 		{
-			input:      "(",
-			noMoreData: true,
-			expected:   "(",
+			input:    dataChunk{data: []byte("("), complete: true},
+			expected: []byte("("),
 		},
 		{
-			input:      "<=",
-			noMoreData: true,
-			expected:   "<=",
+			input:    dataChunk{data: []byte("<="), complete: true},
+			expected: []byte("<="),
 		},
 		{
-			input:      "<",
-			noMoreData: true,
-			expected:   "<",
+			input:    dataChunk{data: []byte("<"), complete: true},
+			expected: []byte("<"),
 		},
 		{
-			input:      "<",
-			noMoreData: false,
-			expected:   "",
+			input:    dataChunk{data: []byte("<"), complete: false},
+			expected: nil,
 		},
 	}
 
 	for _, tc := range testCases {
-		result := extractSeparatorToken([]byte(tc.input), tc.noMoreData)
-		assert.Equal(t, tc.expected, string(result), "Input: %q, NoMoreData: %v", tc.input, tc.noMoreData)
+		result := extractSeparatorToken(tc.input)
+		assert.Equal(t, tc.expected, result, "Input: %v", tc.input)
 	}
 }
