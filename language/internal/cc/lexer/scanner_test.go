@@ -169,7 +169,7 @@ func TestExtractMultiLineCommentToken(t *testing.T) {
 	testCases := []struct {
 		input         dataChunk
 		expectedOk    []byte
-		expectedError string
+		expectedError error
 	}{
 		{
 			input:      dataChunk{data: []byte("/* This is a multi line comment */\nint main()"), complete: true},
@@ -177,7 +177,7 @@ func TestExtractMultiLineCommentToken(t *testing.T) {
 		},
 		{
 			input:         dataChunk{data: []byte("/* This is a multi line comment"), complete: true},
-			expectedError: "unterminated multi-line comment",
+			expectedError: ErrMultiLineCommentUnterminated,
 		},
 		{
 			input:      dataChunk{data: []byte("/* This is a multi line comment"), complete: false},
@@ -188,11 +188,7 @@ func TestExtractMultiLineCommentToken(t *testing.T) {
 	for _, tc := range testCases {
 		result, err := extractMultiLineCommentToken(tc.input)
 		assert.Equal(t, tc.expectedOk, result, "Input: %v", tc.input)
-		if tc.expectedError == "" {
-			assert.NoError(t, err, "Input: %v", tc.input)
-		} else {
-			assert.EqualError(t, err, tc.expectedError, "Input: %v", tc.input)
-		}
+		assert.Equal(t, tc.expectedError, err, "Input: %v", tc.input)
 	}
 }
 
@@ -200,7 +196,7 @@ func TestExtractStringLiteralToken(t *testing.T) {
 	testCases := []struct {
 		input         dataChunk
 		expectedOk    []byte
-		expectedError string
+		expectedError error
 	}{
 		{
 			input:      dataChunk{data: []byte(`""`), complete: true},
@@ -224,7 +220,7 @@ func TestExtractStringLiteralToken(t *testing.T) {
 		},
 		{
 			input:         dataChunk{data: []byte(`"This is an unterminated string literal`), complete: true},
-			expectedError: "unterminated string literal",
+			expectedError: ErrStringLiteralUnterminated,
 		},
 		{
 			input:      dataChunk{data: []byte(`"Escaped backslash \\"; "different string"`), complete: true},
@@ -235,11 +231,7 @@ func TestExtractStringLiteralToken(t *testing.T) {
 	for _, tc := range testCases {
 		result, err := extractStringLiteralToken(tc.input)
 		assert.Equal(t, tc.expectedOk, result, "Input: %v", tc.input)
-		if tc.expectedError == "" {
-			assert.NoError(t, err, "Input: %v", tc.input)
-		} else {
-			assert.EqualError(t, err, tc.expectedError, "Input: %v", tc.input)
-		}
+		assert.Equal(t, tc.expectedError, err, "Input: %v", tc.input)
 	}
 }
 
@@ -247,7 +239,7 @@ func TestExtractRawStringLiteralToken(t *testing.T) {
 	testCases := []struct {
 		input         dataChunk
 		expectedOk    []byte
-		expectedError string
+		expectedError error
 	}{
 		{
 			input:      dataChunk{data: []byte(`R"()"`), complete: true},
@@ -259,7 +251,7 @@ func TestExtractRawStringLiteralToken(t *testing.T) {
 		},
 		{
 			input:         dataChunk{data: []byte(`R"(This is an unterminated raw string literal`), complete: true},
-			expectedError: "unterminated raw string literal",
+			expectedError: ErrRawStringLiteralUnterminated,
 		},
 		{
 			input:      dataChunk{data: []byte(`R"(This is an unterminated raw string literal`), complete: false},
@@ -267,7 +259,7 @@ func TestExtractRawStringLiteralToken(t *testing.T) {
 		},
 		{
 			input:         dataChunk{data: []byte(`R"delim(This is an unterminated raw string literal)`), complete: true},
-			expectedError: "unterminated raw string literal",
+			expectedError: ErrRawStringLiteralUnterminated,
 		},
 		{
 			input:      dataChunk{data: []byte(`R"delim(This is an unterminated raw string literal)`), complete: false},
@@ -275,18 +267,14 @@ func TestExtractRawStringLiteralToken(t *testing.T) {
 		},
 		{
 			input:         dataChunk{data: []byte(`R"Missing parenthesis"`), complete: true},
-			expectedError: "missing opening delimiter '(' in raw string literal",
+			expectedError: ErrRawStringLiteralMissingOpeningDelimiter,
 		},
 	}
 
 	for _, tc := range testCases {
 		result, err := extractRawStringLiteralToken(tc.input)
 		assert.Equal(t, tc.expectedOk, result, "Input: %v", tc.input)
-		if tc.expectedError == "" {
-			assert.NoError(t, err, "Input: %v", tc.input)
-		} else {
-			assert.EqualError(t, err, tc.expectedError, "Input: %v", tc.input)
-		}
+		assert.Equal(t, tc.expectedError, err, "Input: %v", tc.input)
 	}
 }
 

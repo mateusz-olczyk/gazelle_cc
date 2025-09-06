@@ -22,6 +22,13 @@ import (
 	"io"
 )
 
+var (
+	ErrMultiLineCommentUnterminated            = errors.New("unterminated multi-line comment")
+	ErrRawStringLiteralMissingOpeningDelimiter = errors.New("missing opening delimiter '(' in raw string literal")
+	ErrRawStringLiteralUnterminated            = errors.New("unterminated raw string literal")
+	ErrStringLiteralUnterminated               = errors.New("unterminated string literal")
+)
+
 type dataChunk struct {
 	data     []byte // chunk of the data to be tokenized, may be too short to form a complete token
 	complete bool   // whether there is no more data to be read after this chunk
@@ -103,7 +110,7 @@ func extractMultiLineCommentToken(ch dataChunk) ([]byte, error) {
 	}
 
 	if ch.complete {
-		return nil, errors.New("unterminated multi-line comment")
+		return nil, ErrMultiLineCommentUnterminated
 	}
 
 	return nil, nil
@@ -115,7 +122,7 @@ func extractStringLiteralToken(ch dataChunk) ([]byte, error) {
 		relIndex := bytes.IndexByte(ch.data[start:], '"')
 		if relIndex < 0 {
 			if ch.complete {
-				return nil, errors.New("unterminated string literal")
+				return nil, ErrStringLiteralUnterminated
 			} else {
 				return nil, nil
 			}
@@ -134,7 +141,7 @@ func extractRawStringLiteralToken(ch dataChunk) ([]byte, error) {
 	start := bytes.IndexByte(ch.data, '(')
 	if start < 0 {
 		if ch.complete {
-			return nil, errors.New("missing opening delimiter '(' in raw string literal")
+			return nil, ErrRawStringLiteralMissingOpeningDelimiter
 		} else {
 			return nil, nil
 		}
@@ -149,7 +156,7 @@ func extractRawStringLiteralToken(ch dataChunk) ([]byte, error) {
 	endIndex := bytes.Index(ch.data, endDelimiter)
 	if endIndex < 0 {
 		if ch.complete {
-			return nil, errors.New("unterminated raw string literal")
+			return nil, ErrRawStringLiteralUnterminated
 		} else {
 			return nil, nil
 		}
