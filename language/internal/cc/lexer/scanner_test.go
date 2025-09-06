@@ -15,6 +15,7 @@
 package lexer
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -304,5 +305,56 @@ func TestExtractSeparatorToken(t *testing.T) {
 	for _, tc := range testCases {
 		result := extractSeparatorToken(tc.input)
 		assert.Equal(t, tc.expected, result, "Input: %v", tc.input)
+	}
+}
+
+func readAllTokens(source string) (tokens []string, err error) {
+	scanner := newScanner(strings.NewReader(source))
+	tokens = make([]string, 0)
+	for scanner.Scan() {
+		tokens = append(tokens, scanner.Text())
+	}
+
+	err = scanner.Err()
+	return
+}
+
+func TestScanner(t *testing.T) {
+	testCases := []struct {
+		input          string
+		expectedTokens []string
+		expectedError  error
+	}{
+		{
+			input:          "int main() { return 0; }",
+			expectedTokens: []string{"int", " ", "main", "(", ")", " ", "{", " ", "return", " ", "0", ";", " ", "}"},
+		},
+		{
+			input:          "/* int main() { return 0; } */\n\tint main() { return 0; }",
+			expectedTokens: []string{"/* int main() { return 0; } */", "\n\t", "int", " ", "main", "(", ")", " ", "{", " ", "return", " ", "0", ";", " ", "}"},
+		},
+		{
+			input:          "// int main() { return 0; }\nint main() { return 0; }",
+			expectedTokens: []string{"// int main() { return 0; }", "\n", "int", " ", "main", "(", ")", " ", "{", " ", "return", " ", "0", ";", " ", "}"},
+		},
+		{
+			input:          "#define FAVOURITE_LETTER R",
+			expectedTokens: []string{"#", "define", " ", "FAVOURITE_LETTER", " ", "R"},
+		},
+		{
+			input:          "int main() { /* unterminated comment\n return 0; }",
+			expectedTokens: []string{"int", " ", "main", "(", ")", " ", "{", " "},
+			expectedError:  ErrMultiLineCommentUnterminated,
+		},
+		{
+			input:          `const char *raw_string = R"delim( #include <iostream> )delim";`,
+			expectedTokens: []string{"const", " ", "char", " ", "*", "raw_string", " ", "=", " ", `R"delim( #include <iostream> )delim"`, ";"},
+		},
+	}
+
+	for _, tc := range testCases {
+		tokens, err := readAllTokens(tc.input)
+		assert.Equal(t, tc.expectedTokens, tokens, "Input: %q", tc.input)
+		assert.Equal(t, tc.expectedError, err, "Input: %q", tc.input)
 	}
 }

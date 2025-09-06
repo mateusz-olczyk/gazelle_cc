@@ -60,7 +60,7 @@ func prequalifyToken(ch dataChunk) TokenType {
 		} else if len(ch.data) > 1 || ch.complete {
 			return TokenType_Word
 		}
-	case '(', ')', '[', ']', '{', '}', ',', ';', '#', '<', '>', '=', '!':
+	case '(', ')', '[', ']', '{', '}', ',', ';', '*', '#', '<', '>', '=', '!':
 		return TokenType_Separator
 	default:
 		return TokenType_Word
@@ -167,7 +167,7 @@ func extractRawStringLiteralToken(ch dataChunk) ([]byte, error) {
 
 func extractSeparatorToken(ch dataChunk) []byte {
 	switch ch.data[0] {
-	case '(', ')', '[', ']', '{', '}', ',', ';', '#':
+	case '(', ')', '[', ']', '{', '}', ',', ';', '*', '#':
 		return ch.data[:1]
 	case '<', '>', '=', '!':
 		if len(ch.data) > 1 && ch.data[1] == '=' {
