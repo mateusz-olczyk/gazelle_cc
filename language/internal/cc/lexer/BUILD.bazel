@@ -8,3 +8,12 @@ go_library(
     ],
     importpath = "github.com/EngFlow/gazelle_cc/language/internal/cc/lexer",
 )
+
+go_test(
+    name = "lexer_test",
+    srcs = [
+        "scanner_test.go",
+    ],
+    embed = [":lexer"],
+    deps = ["@com_github_stretchr_testify//assert"],
+)
