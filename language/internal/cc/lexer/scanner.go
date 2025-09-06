@@ -17,6 +17,7 @@ package lexer
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"io"
 )
 
@@ -42,7 +43,7 @@ func prequalifyToken(data []byte, noMoreData bool) TokenType {
 		} else if len(data) > 1 || noMoreData {
 			return TokenType_Word
 		}
-	case '(', ')', '[', ']', '{', '}', ',', ';', '<', '>', '=', '!':
+	case '(', ')', '[', ']', '{', '}', ',', ';', '#', '<', '>', '=', '!':
 		return TokenType_Separator
 	default:
 		return TokenType_Word
@@ -91,45 +92,61 @@ func extractSingleLineCommentToken(data []byte, noMoreData bool) []byte {
 	return nil
 }
 
-func extractMultiLineCommentToken(data []byte) []byte {
+func extractMultiLineCommentToken(data []byte, noMoreData bool) ([]byte, error) {
 	if endIndex := bytes.Index(data, []byte("*/")); endIndex >= 0 {
-		return data[:endIndex+2]
+		return data[:endIndex+2], nil
 	}
 
-	return nil
+	if noMoreData {
+		return nil, errors.New("unterminated multi-line comment")
+	}
+
+	return nil, nil
 }
 
-func extractStringLiteralToken(data []byte) []byte {
+func extractStringLiteralToken(data []byte, noMoreData bool) ([]byte, error) {
 	start := 1
 	for {
 		relIndex := bytes.IndexByte(data[start:], '"')
 		if relIndex < 0 {
-			return nil
+			if noMoreData {
+				return nil, errors.New("unterminated string literal")
+			} else {
+				return nil, nil
+			}
 		}
 
 		absIndex := start + relIndex
 		if data[absIndex-1] != '\\' || data[absIndex-2] == '\\' {
-			return data[:absIndex+1]
+			return data[:absIndex+1], nil
 		}
 
 		start = absIndex + 1
 	}
 }
 
-func extractRawStringLiteralToken(data []byte) []byte {
+func extractRawStringLiteralToken(data []byte, noMoreData bool) ([]byte, error) {
 	startIndex := bytes.IndexByte(data, '(')
 	if startIndex < 0 {
-		return nil
+		if noMoreData {
+			return nil, errors.New("missing opening delimiter '(' in raw string literal")
+		} else {
+			return nil, nil
+		}
 	}
 
 	delimiter := data[2:startIndex]
 	endDelimiter := append([]byte{')'}, delimiter...)
 	endIndex := bytes.Index(data, endDelimiter)
 	if endIndex < 0 {
-		return nil
+		if noMoreData {
+			return nil, errors.New("unterminated raw string literal")
+		} else {
+			return nil, nil
+		}
 	}
 
-	return data[:endIndex+len(endDelimiter)]
+	return data[:endIndex+len(endDelimiter)], nil
 }
 
 func extractSeparatorToken(data []byte, noMoreData bool) []byte {
@@ -138,7 +155,7 @@ func extractSeparatorToken(data []byte, noMoreData bool) []byte {
 	}
 
 	switch data[0] {
-	case '(', ')', '[', ']', '{', '}', ',', ';':
+	case '(', ')', '[', ']', '{', '}', ',', ';', '#':
 		return data[:1]
 	case '<', '>', '=', '!':
 		if len(data) > 1 && data[1] == '=' {
@@ -151,29 +168,29 @@ func extractSeparatorToken(data []byte, noMoreData bool) []byte {
 	return nil
 }
 
-func extractToken(data []byte, noMoreData bool, t TokenType) []byte {
+func extractToken(data []byte, noMoreData bool, t TokenType) ([]byte, error) {
 	switch t {
 	case TokenType_Word:
-		return extractWordToken(data, noMoreData)
+		return extractWordToken(data, noMoreData), nil
 	case TokenType_Whitespace:
-		return extractWhitespaceToken(data, noMoreData)
+		return extractWhitespaceToken(data, noMoreData), nil
 	case TokenType_SingleLineComment:
-		return extractSingleLineCommentToken(data, noMoreData)
+		return extractSingleLineCommentToken(data, noMoreData), nil
 	case TokenType_MultiLineComment:
-		return extractMultiLineCommentToken(data)
+		return extractMultiLineCommentToken(data, noMoreData)
 	case TokenType_StringLiteral:
-		return extractStringLiteralToken(data)
+		return extractStringLiteralToken(data, noMoreData)
 	case TokenType_RawStringLiteral:
-		return extractRawStringLiteralToken(data)
+		return extractRawStringLiteralToken(data, noMoreData)
 	case TokenType_Separator:
-		return extractSeparatorToken(data, noMoreData)
+		return extractSeparatorToken(data, noMoreData), nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func tokenizer(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	token = extractToken(data, atEOF, prequalifyToken(data, atEOF))
+	token, err = extractToken(data, atEOF, prequalifyToken(data, atEOF))
 	advance = len(token)
 	return
 }
