@@ -135,8 +135,12 @@ func extractRawStringLiteralToken(data []byte, noMoreData bool) ([]byte, error) 
 		}
 	}
 
-	delimiter := data[2:startIndex]
-	endDelimiter := append([]byte{')'}, delimiter...)
+	customDelimiter := data[2:startIndex]
+	endDelimiter := make([]byte, 0, len(customDelimiter)+2)
+	endDelimiter = append(endDelimiter, ')')
+	endDelimiter = append(endDelimiter, customDelimiter...)
+	endDelimiter = append(endDelimiter, '"')
+
 	endIndex := bytes.Index(data, endDelimiter)
 	if endIndex < 0 {
 		if noMoreData {
