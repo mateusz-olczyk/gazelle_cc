@@ -29,16 +29,16 @@ var (
 	ErrStringLiteralUnterminated               = errors.New("unterminated string literal")
 )
 
-type dataChunk struct {
+type chunk struct {
 	data     []byte // chunk of the data to be tokenized, may be too short to form a complete token
 	complete bool   // whether there is no more data to be read after this chunk
 }
 
-func (ch dataChunk) String() string {
-	return fmt.Sprintf("dataChunk{data: %q, complete: %v}", ch.data, ch.complete)
+func (ch chunk) String() string {
+	return fmt.Sprintf("chunk{data: %q, complete: %v}", ch.data, ch.complete)
 }
 
-func prequalifyToken(ch dataChunk) TokenType {
+func prequalifyToken(ch chunk) TokenType {
 	if len(ch.data) == 0 {
 		return TokenType_Incomplete
 	}
@@ -70,9 +70,9 @@ func prequalifyToken(ch dataChunk) TokenType {
 }
 
 // applicable for tokens where one character class is repeated one or more times (like in regex "[abc]+")
-func extractSimpleTokenWithDynamicLength(ch dataChunk, t TokenType) []byte {
+func extractSimpleTokenWithDynamicLength(ch chunk, t TokenType) []byte {
 	for i := 1; i < len(ch.data); i++ {
-		if prequalifyToken(dataChunk{ch.data[i:], ch.complete}) != t {
+		if prequalifyToken(chunk{ch.data[i:], ch.complete}) != t {
 			return ch.data[:i]
 		}
 	}
@@ -84,15 +84,15 @@ func extractSimpleTokenWithDynamicLength(ch dataChunk, t TokenType) []byte {
 	}
 }
 
-func extractWordToken(ch dataChunk) []byte {
+func extractWordToken(ch chunk) []byte {
 	return extractSimpleTokenWithDynamicLength(ch, TokenType_Word)
 }
 
-func extractWhitespaceToken(ch dataChunk) []byte {
+func extractWhitespaceToken(ch chunk) []byte {
 	return extractSimpleTokenWithDynamicLength(ch, TokenType_Whitespace)
 }
 
-func extractSingleLineCommentToken(ch dataChunk) []byte {
+func extractSingleLineCommentToken(ch chunk) []byte {
 	if newlineIndex := bytes.IndexAny(ch.data, "\r\n"); newlineIndex >= 0 {
 		return ch.data[:newlineIndex]
 	}
@@ -104,7 +104,7 @@ func extractSingleLineCommentToken(ch dataChunk) []byte {
 	return nil
 }
 
-func extractMultiLineCommentToken(ch dataChunk) ([]byte, error) {
+func extractMultiLineCommentToken(ch chunk) ([]byte, error) {
 	if endIndex := bytes.Index(ch.data, []byte("*/")); endIndex >= 0 {
 		return ch.data[:endIndex+2], nil
 	}
@@ -116,7 +116,7 @@ func extractMultiLineCommentToken(ch dataChunk) ([]byte, error) {
 	return nil, nil
 }
 
-func extractStringLiteralToken(ch dataChunk) ([]byte, error) {
+func extractStringLiteralToken(ch chunk) ([]byte, error) {
 	start := 1
 	for {
 		relIndex := bytes.IndexByte(ch.data[start:], '"')
@@ -137,7 +137,7 @@ func extractStringLiteralToken(ch dataChunk) ([]byte, error) {
 	}
 }
 
-func extractRawStringLiteralToken(ch dataChunk) ([]byte, error) {
+func extractRawStringLiteralToken(ch chunk) ([]byte, error) {
 	start := bytes.IndexByte(ch.data, '(')
 	if start < 0 {
 		if ch.complete {
@@ -165,7 +165,7 @@ func extractRawStringLiteralToken(ch dataChunk) ([]byte, error) {
 	return ch.data[:endIndex+len(endDelimiter)], nil
 }
 
-func extractSeparatorToken(ch dataChunk) []byte {
+func extractSeparatorToken(ch chunk) []byte {
 	switch ch.data[0] {
 	case '(', ')', '[', ']', '{', '}', ',', ';', '*', '#':
 		return ch.data[:1]
@@ -180,7 +180,7 @@ func extractSeparatorToken(ch dataChunk) []byte {
 	return nil
 }
 
-func extractToken(ch dataChunk) ([]byte, error) {
+func extractToken(ch chunk) ([]byte, error) {
 	switch prequalifyToken(ch) {
 	case TokenType_Word:
 		return extractWordToken(ch), nil
@@ -202,7 +202,7 @@ func extractToken(ch dataChunk) ([]byte, error) {
 }
 
 func tokenizer(data []byte, atEOF bool) (advance int, token []byte, err error) {
-	token, err = extractToken(dataChunk{data, atEOF})
+	token, err = extractToken(chunk{data, atEOF})
 	advance = len(token)
 	return
 }

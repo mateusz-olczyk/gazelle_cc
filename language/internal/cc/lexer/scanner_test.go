@@ -23,64 +23,64 @@ import (
 
 func TestPrequalifyToken(t *testing.T) {
 	testCases := []struct {
-		input    dataChunk
+		input    chunk
 		expected TokenType
 	}{
 		{
-			input:    dataChunk{data: []byte("")},
+			input:    chunk{data: []byte("")},
 			expected: TokenType_Incomplete,
 		},
 		{
-			input:    dataChunk{data: []byte(" (")},
+			input:    chunk{data: []byte(" (")},
 			expected: TokenType_Whitespace,
 		},
 		{
-			input:    dataChunk{data: []byte("    \n")},
+			input:    chunk{data: []byte("    \n")},
 			expected: TokenType_Whitespace,
 		},
 		{
-			input:    dataChunk{data: []byte("    \n")},
+			input:    chunk{data: []byte("    \n")},
 			expected: TokenType_Whitespace,
 		},
 		{
-			input:    dataChunk{data: []byte(`"string`)},
+			input:    chunk{data: []byte(`"string`)},
 			expected: TokenType_StringLiteral,
 		},
 		{
-			input:    dataChunk{data: []byte(`R"(raw string`)},
+			input:    chunk{data: []byte(`R"(raw string`)},
 			expected: TokenType_RawStringLiteral,
 		},
 		{
 			// 'R' could be the start of a raw string literal, or it could be a word. We need more data to decide.
-			input:    dataChunk{data: []byte("R"), complete: false},
+			input:    chunk{data: []byte("R"), complete: false},
 			expected: TokenType_Incomplete,
 		},
 		{
-			input:    dataChunk{data: []byte("R"), complete: true},
+			input:    chunk{data: []byte("R"), complete: true},
 			expected: TokenType_Word,
 		},
 		{
-			input:    dataChunk{data: []byte("RR")},
+			input:    chunk{data: []byte("RR")},
 			expected: TokenType_Word,
 		},
 		{
-			input:    dataChunk{data: []byte("// single line comment")},
+			input:    chunk{data: []byte("// single line comment")},
 			expected: TokenType_SingleLineComment,
 		},
 		{
-			input:    dataChunk{data: []byte("/* multi line comment")},
+			input:    chunk{data: []byte("/* multi line comment")},
 			expected: TokenType_MultiLineComment,
 		},
 		{
-			input:    dataChunk{data: []byte("/")},
+			input:    chunk{data: []byte("/")},
 			expected: TokenType_Incomplete,
 		},
 		{
-			input:    dataChunk{data: []byte("<iostream>")},
+			input:    chunk{data: []byte("<iostream>")},
 			expected: TokenType_Separator,
 		},
 		{
-			input:    dataChunk{data: []byte("int main()")},
+			input:    chunk{data: []byte("int main()")},
 			expected: TokenType_Word,
 		},
 	}
@@ -93,19 +93,19 @@ func TestPrequalifyToken(t *testing.T) {
 
 func TestExtractWordToken(t *testing.T) {
 	testCases := []struct {
-		input    dataChunk
+		input    chunk
 		expected []byte
 	}{
 		{
-			input:    dataChunk{data: []byte("identifier123;"), complete: true},
+			input:    chunk{data: []byte("identifier123;"), complete: true},
 			expected: []byte("identifier123"),
 		},
 		{
-			input:    dataChunk{data: []byte("identifier123"), complete: true},
+			input:    chunk{data: []byte("identifier123"), complete: true},
 			expected: []byte("identifier123"),
 		},
 		{
-			input:    dataChunk{data: []byte("identifier123"), complete: false},
+			input:    chunk{data: []byte("identifier123"), complete: false},
 			expected: nil,
 		},
 	}
@@ -118,19 +118,19 @@ func TestExtractWordToken(t *testing.T) {
 
 func TestExtractWhitespaceToken(t *testing.T) {
 	testCases := []struct {
-		input    dataChunk
+		input    chunk
 		expected []byte
 	}{
 		{
-			input:    dataChunk{data: []byte("   \n\t  identifier"), complete: true},
+			input:    chunk{data: []byte("   \n\t  identifier"), complete: true},
 			expected: []byte("   \n\t  "),
 		},
 		{
-			input:    dataChunk{data: []byte("   \n\t  "), complete: true},
+			input:    chunk{data: []byte("   \n\t  "), complete: true},
 			expected: []byte("   \n\t  "),
 		},
 		{
-			input:    dataChunk{data: []byte("   \n\t  "), complete: false},
+			input:    chunk{data: []byte("   \n\t  "), complete: false},
 			expected: nil,
 		},
 	}
@@ -143,19 +143,19 @@ func TestExtractWhitespaceToken(t *testing.T) {
 
 func TestExtractSingleLineCommentToken(t *testing.T) {
 	testCases := []struct {
-		input    dataChunk
+		input    chunk
 		expected []byte
 	}{
 		{
-			input:    dataChunk{data: []byte("// This is a single line comment\nint main()"), complete: true},
+			input:    chunk{data: []byte("// This is a single line comment\nint main()"), complete: true},
 			expected: []byte("// This is a single line comment"),
 		},
 		{
-			input:    dataChunk{data: []byte("// This is a single line comment"), complete: true},
+			input:    chunk{data: []byte("// This is a single line comment"), complete: true},
 			expected: []byte("// This is a single line comment"),
 		},
 		{
-			input:    dataChunk{data: []byte("// This is a single line comment"), complete: false},
+			input:    chunk{data: []byte("// This is a single line comment"), complete: false},
 			expected: nil,
 		},
 	}
@@ -168,20 +168,20 @@ func TestExtractSingleLineCommentToken(t *testing.T) {
 
 func TestExtractMultiLineCommentToken(t *testing.T) {
 	testCases := []struct {
-		input         dataChunk
+		input         chunk
 		expectedOk    []byte
 		expectedError error
 	}{
 		{
-			input:      dataChunk{data: []byte("/* This is a multi line comment */\nint main()"), complete: true},
+			input:      chunk{data: []byte("/* This is a multi line comment */\nint main()"), complete: true},
 			expectedOk: []byte("/* This is a multi line comment */"),
 		},
 		{
-			input:         dataChunk{data: []byte("/* This is a multi line comment"), complete: true},
+			input:         chunk{data: []byte("/* This is a multi line comment"), complete: true},
 			expectedError: ErrMultiLineCommentUnterminated,
 		},
 		{
-			input:      dataChunk{data: []byte("/* This is a multi line comment"), complete: false},
+			input:      chunk{data: []byte("/* This is a multi line comment"), complete: false},
 			expectedOk: nil,
 		},
 	}
@@ -195,36 +195,36 @@ func TestExtractMultiLineCommentToken(t *testing.T) {
 
 func TestExtractStringLiteralToken(t *testing.T) {
 	testCases := []struct {
-		input         dataChunk
+		input         chunk
 		expectedOk    []byte
 		expectedError error
 	}{
 		{
-			input:      dataChunk{data: []byte(`""`), complete: true},
+			input:      chunk{data: []byte(`""`), complete: true},
 			expectedOk: []byte(`""`),
 		},
 		{
-			input:      dataChunk{data: []byte(`"\""`), complete: true},
+			input:      chunk{data: []byte(`"\""`), complete: true},
 			expectedOk: []byte(`"\""`),
 		},
 		{
-			input:      dataChunk{data: []byte(`"This is a string literal"`), complete: true},
+			input:      chunk{data: []byte(`"This is a string literal"`), complete: true},
 			expectedOk: []byte(`"This is a string literal"`),
 		},
 		{
-			input:      dataChunk{data: []byte(`"This is a string with an escaped quote: \" inside"`), complete: true},
+			input:      chunk{data: []byte(`"This is a string with an escaped quote: \" inside"`), complete: true},
 			expectedOk: []byte(`"This is a string with an escaped quote: \" inside"`),
 		},
 		{
-			input:      dataChunk{data: []byte(`"This is an unterminated string literal`), complete: false},
+			input:      chunk{data: []byte(`"This is an unterminated string literal`), complete: false},
 			expectedOk: nil,
 		},
 		{
-			input:         dataChunk{data: []byte(`"This is an unterminated string literal`), complete: true},
+			input:         chunk{data: []byte(`"This is an unterminated string literal`), complete: true},
 			expectedError: ErrStringLiteralUnterminated,
 		},
 		{
-			input:      dataChunk{data: []byte(`"Escaped backslash \\"; "different string"`), complete: true},
+			input:      chunk{data: []byte(`"Escaped backslash \\"; "different string"`), complete: true},
 			expectedOk: []byte(`"Escaped backslash \\"`),
 		},
 	}
@@ -238,36 +238,36 @@ func TestExtractStringLiteralToken(t *testing.T) {
 
 func TestExtractRawStringLiteralToken(t *testing.T) {
 	testCases := []struct {
-		input         dataChunk
+		input         chunk
 		expectedOk    []byte
 		expectedError error
 	}{
 		{
-			input:      dataChunk{data: []byte(`R"()"`), complete: true},
+			input:      chunk{data: []byte(`R"()"`), complete: true},
 			expectedOk: []byte(`R"()"`),
 		},
 		{
-			input:      dataChunk{data: []byte(`R"delim(This is a raw string with a custom delimiter)delim"`), complete: true},
+			input:      chunk{data: []byte(`R"delim(This is a raw string with a custom delimiter)delim"`), complete: true},
 			expectedOk: []byte(`R"delim(This is a raw string with a custom delimiter)delim"`),
 		},
 		{
-			input:         dataChunk{data: []byte(`R"(This is an unterminated raw string literal`), complete: true},
+			input:         chunk{data: []byte(`R"(This is an unterminated raw string literal`), complete: true},
 			expectedError: ErrRawStringLiteralUnterminated,
 		},
 		{
-			input:      dataChunk{data: []byte(`R"(This is an unterminated raw string literal`), complete: false},
+			input:      chunk{data: []byte(`R"(This is an unterminated raw string literal`), complete: false},
 			expectedOk: nil,
 		},
 		{
-			input:         dataChunk{data: []byte(`R"delim(This is an unterminated raw string literal)`), complete: true},
+			input:         chunk{data: []byte(`R"delim(This is an unterminated raw string literal)`), complete: true},
 			expectedError: ErrRawStringLiteralUnterminated,
 		},
 		{
-			input:      dataChunk{data: []byte(`R"delim(This is an unterminated raw string literal)`), complete: false},
+			input:      chunk{data: []byte(`R"delim(This is an unterminated raw string literal)`), complete: false},
 			expectedOk: nil,
 		},
 		{
-			input:         dataChunk{data: []byte(`R"Missing parenthesis"`), complete: true},
+			input:         chunk{data: []byte(`R"Missing parenthesis"`), complete: true},
 			expectedError: ErrRawStringLiteralMissingOpeningDelimiter,
 		},
 	}
@@ -281,23 +281,23 @@ func TestExtractRawStringLiteralToken(t *testing.T) {
 
 func TestExtractSeparatorToken(t *testing.T) {
 	testCases := []struct {
-		input    dataChunk
+		input    chunk
 		expected []byte
 	}{
 		{
-			input:    dataChunk{data: []byte("("), complete: true},
+			input:    chunk{data: []byte("("), complete: true},
 			expected: []byte("("),
 		},
 		{
-			input:    dataChunk{data: []byte("<="), complete: true},
+			input:    chunk{data: []byte("<="), complete: true},
 			expected: []byte("<="),
 		},
 		{
-			input:    dataChunk{data: []byte("<"), complete: true},
+			input:    chunk{data: []byte("<"), complete: true},
 			expected: []byte("<"),
 		},
 		{
-			input:    dataChunk{data: []byte("<"), complete: false},
+			input:    chunk{data: []byte("<"), complete: false},
 			expected: nil,
 		},
 	}
