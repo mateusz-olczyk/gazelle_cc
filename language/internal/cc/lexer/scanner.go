@@ -17,17 +17,8 @@ package lexer
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
-)
-
-var (
-	ErrContinueLineInvalid                     = errors.New("missing newline character after line continuation backslash")
-	ErrMultiLineCommentUnterminated            = errors.New("unterminated multi-line comment")
-	ErrRawStringLiteralMissingOpeningDelimiter = errors.New("missing opening delimiter '(' in raw string literal")
-	ErrRawStringLiteralUnterminated            = errors.New("unterminated raw string literal")
-	ErrStringLiteralUnterminated               = errors.New("unterminated string literal")
 )
 
 type chunk struct {

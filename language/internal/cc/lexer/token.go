@@ -14,6 +14,8 @@
 
 package lexer
 
+import "errors"
+
 type TokenType int
 
 const (
@@ -26,4 +28,12 @@ const (
 	TokenType_StringLiteral
 	TokenType_RawStringLiteral
 	TokenType_Separator
+)
+
+var (
+	ErrContinueLineInvalid                     = errors.New("missing newline character after line continuation backslash")
+	ErrMultiLineCommentUnterminated            = errors.New("unterminated multi-line comment")
+	ErrRawStringLiteralMissingOpeningDelimiter = errors.New("missing opening delimiter '(' in raw string literal")
+	ErrRawStringLiteralUnterminated            = errors.New("unterminated raw string literal")
+	ErrStringLiteralUnterminated               = errors.New("unterminated string literal")
 )
