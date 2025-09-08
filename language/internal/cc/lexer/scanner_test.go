@@ -83,6 +83,10 @@ func TestPrequalifyToken(t *testing.T) {
 			input:    chunk{data: []byte("int main()")},
 			expected: TokenType_Word,
 		},
+		{
+			input:    chunk{data: []byte("\\\r")},
+			expected: TokenType_ContinueLine,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -138,6 +142,49 @@ func TestExtractWhitespaceToken(t *testing.T) {
 	for _, tc := range testCases {
 		result := extractWhitespaceToken(tc.input)
 		assert.Equal(t, tc.expected, result, "Input: %v", tc.input)
+	}
+}
+
+func TestExtractContinueLineToken(t *testing.T) {
+	testCases := []struct {
+		input         chunk
+		expectedOk    []byte
+		expectedError error
+	}{
+		{
+			input:      chunk{data: []byte("\\\r\n")},
+			expectedOk: []byte("\\\r\n"),
+		},
+		{
+			input:      chunk{data: []byte("\\\n")},
+			expectedOk: []byte("\\\n"),
+		},
+		{
+			input:      chunk{data: []byte("\\\r"), complete: false},
+			expectedOk: nil,
+		},
+		{
+			input:         chunk{data: []byte("\\\r"), complete: true},
+			expectedError: ErrContinueLineInvalid,
+		},
+		{
+			input:      chunk{data: []byte("\\"), complete: false},
+			expectedOk: nil,
+		},
+		{
+			input:         chunk{data: []byte("\\"), complete: true},
+			expectedError: ErrContinueLineInvalid,
+		},
+		{
+			input:         chunk{data: []byte("\\ some text"), complete: true},
+			expectedError: ErrContinueLineInvalid,
+		},
+	}
+
+	for _, tc := range testCases {
+		result, err := extractContinueLineToken(tc.input)
+		assert.Equal(t, tc.expectedOk, result, "Input: %v", tc.input)
+		assert.Equal(t, tc.expectedError, err, "Input: %v", tc.input)
 	}
 }
 

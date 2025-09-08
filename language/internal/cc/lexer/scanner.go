@@ -23,6 +23,7 @@ import (
 )
 
 var (
+	ErrContinueLineInvalid                     = errors.New("missing newline character after line continuation backslash")
 	ErrMultiLineCommentUnterminated            = errors.New("unterminated multi-line comment")
 	ErrRawStringLiteralMissingOpeningDelimiter = errors.New("missing opening delimiter '(' in raw string literal")
 	ErrRawStringLiteralUnterminated            = errors.New("unterminated raw string literal")
@@ -46,6 +47,8 @@ func prequalifyToken(ch chunk) TokenType {
 	switch ch.data[0] {
 	case '\t', '\n', '\v', '\f', '\r', ' ':
 		return TokenType_Whitespace
+	case '\\':
+		return TokenType_ContinueLine
 	case '/':
 		if len(ch.data) > 1 && ch.data[1] == '/' {
 			return TokenType_SingleLineComment
@@ -70,7 +73,7 @@ func prequalifyToken(ch chunk) TokenType {
 }
 
 // applicable for tokens where one character class is repeated one or more times (like in regex "[abc]+")
-func extractSimpleTokenWithDynamicLength(ch chunk, t TokenType) []byte {
+func extractDynamicSizedToken(ch chunk, t TokenType) []byte {
 	for i := 1; i < len(ch.data); i++ {
 		if prequalifyToken(chunk{ch.data[i:], ch.complete}) != t {
 			return ch.data[:i]
@@ -85,11 +88,24 @@ func extractSimpleTokenWithDynamicLength(ch chunk, t TokenType) []byte {
 }
 
 func extractWordToken(ch chunk) []byte {
-	return extractSimpleTokenWithDynamicLength(ch, TokenType_Word)
+	return extractDynamicSizedToken(ch, TokenType_Word)
 }
 
 func extractWhitespaceToken(ch chunk) []byte {
-	return extractSimpleTokenWithDynamicLength(ch, TokenType_Whitespace)
+	return extractDynamicSizedToken(ch, TokenType_Whitespace)
+}
+
+func extractContinueLineToken(ch chunk) ([]byte, error) {
+	switch {
+	case bytes.HasPrefix(ch.data, []byte("\\\r\n")):
+		return ch.data[:3], nil
+	case bytes.HasPrefix(ch.data, []byte("\\\n")):
+		return ch.data[:2], nil
+	case ch.complete || (len(ch.data) >= 2 && !bytes.HasPrefix(ch.data, []byte("\\\r"))):
+		return nil, ErrContinueLineInvalid
+	default:
+		return nil, nil
+	}
 }
 
 func extractSingleLineCommentToken(ch chunk) []byte {
@@ -186,6 +202,8 @@ func extractToken(ch chunk) ([]byte, error) {
 		return extractWordToken(ch), nil
 	case TokenType_Whitespace:
 		return extractWhitespaceToken(ch), nil
+	case TokenType_ContinueLine:
+		return extractContinueLineToken(ch)
 	case TokenType_SingleLineComment:
 		return extractSingleLineCommentToken(ch), nil
 	case TokenType_MultiLineComment:

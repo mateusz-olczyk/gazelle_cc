@@ -17,12 +17,13 @@ package lexer
 type TokenType int
 
 const (
-	TokenType_Word TokenType = iota
+	TokenType_Incomplete TokenType = iota
+	TokenType_Word
 	TokenType_Whitespace
+	TokenType_ContinueLine
 	TokenType_SingleLineComment
 	TokenType_MultiLineComment
 	TokenType_StringLiteral
 	TokenType_RawStringLiteral
 	TokenType_Separator
-	TokenType_Incomplete
 )
