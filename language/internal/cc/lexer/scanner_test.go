@@ -72,8 +72,16 @@ func TestPrequalifyToken(t *testing.T) {
 			expected: TokenType_MultiLineComment,
 		},
 		{
-			input:    chunk{data: []byte("/")},
+			input:    chunk{data: []byte("/"), complete: false},
 			expected: TokenType_Incomplete,
+		},
+		{
+			input:    chunk{data: []byte("/"), complete: true},
+			expected: TokenType_Word,
+		},
+		{
+			input:    chunk{data: []byte("/ 5")},
+			expected: TokenType_Word,
 		},
 		{
 			input:    chunk{data: []byte("<iostream>")},

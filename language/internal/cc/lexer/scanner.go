@@ -50,17 +50,19 @@ func prequalifyToken(ch chunk) TokenType {
 	case '\\':
 		return TokenType_ContinueLine
 	case '/':
-		if len(ch.data) > 1 && ch.data[1] == '/' {
+		if bytes.HasPrefix(ch.data, []byte("//")) {
 			return TokenType_SingleLineComment
-		} else if len(ch.data) > 1 && ch.data[1] == '*' {
+		} else if bytes.HasPrefix(ch.data, []byte("/*")) {
 			return TokenType_MultiLineComment
+		} else if len(ch.data) >= 2 || ch.complete {
+			return TokenType_Word
 		}
 	case '"':
 		return TokenType_StringLiteral
 	case 'R':
-		if len(ch.data) > 1 && ch.data[1] == '"' {
+		if bytes.HasPrefix(ch.data, []byte(`R"`)) {
 			return TokenType_RawStringLiteral
-		} else if len(ch.data) > 1 || ch.complete {
+		} else if len(ch.data) >= 2 || ch.complete {
 			return TokenType_Word
 		}
 	case '(', ')', '[', ']', '{', '}', ',', ';', '*', '#', '<', '>', '=', '!':
@@ -186,9 +188,9 @@ func extractSeparatorToken(ch chunk) []byte {
 	case '(', ')', '[', ']', '{', '}', ',', ';', '*', '#':
 		return ch.data[:1]
 	case '<', '>', '=', '!':
-		if len(ch.data) > 1 && ch.data[1] == '=' {
+		if len(ch.data) >= 2 && ch.data[1] == '=' {
 			return ch.data[:2]
-		} else if len(ch.data) > 1 || ch.complete {
+		} else if len(ch.data) >= 2 || ch.complete {
 			return ch.data[:1]
 		}
 	}
