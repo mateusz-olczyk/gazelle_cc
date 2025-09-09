@@ -3,6 +3,7 @@ load("@rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "lexer",
     srcs = [
+        "lexer.go",
         "scanner.go",
         "token.go",
     ],
@@ -12,6 +13,7 @@ go_library(
 go_test(
     name = "lexer_test",
     srcs = [
+        "lexer_test.go",
         "scanner_test.go",
     ],
     embed = [":lexer"],

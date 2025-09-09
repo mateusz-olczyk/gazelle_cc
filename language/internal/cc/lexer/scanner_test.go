@@ -355,6 +355,10 @@ func TestExtractSeparatorToken(t *testing.T) {
 			input:    chunk{data: []byte("<"), complete: false},
 			expected: nil,
 		},
+		{
+			input:    chunk{data: []byte("#include"), complete: false},
+			expected: []byte("#"),
+		},
 	}
 
 	for _, tc := range testCases {
