@@ -1,0 +1,31 @@
+--- /dev/null
++++ BUILD.bazel
+@@ -0,0 +1,16 @@
++load("@rules_cc//cc:defs.bzl", "cc_library")
++
++cc_library(
++    name = "tree-sitter-cpp",
++    srcs = glob([
++        "src/*.c",
++        "src/tree_sitter/*.h",
++    ]),
++    hdrs = ["bindings/c/tree-sitter-cpp.h"],
++    copts = [
++        "-std=c11",
++        "-fPIC",
++    ],
++    strip_include_prefix = "bindings/c",
++    visibility = ["//visibility:public"],
++)
+
+--- bindings/go/BUILD.bazel
++++ bindings/go/BUILD.bazel
+@@ -5,0 +6 @@
++    cdeps = ["//:tree-sitter-cpp"],
+
+--- bindings/go/binding.go
++++ bindings/go/binding.go
+@@ -4,2 +4 @@
+-// #include "../../src/parser.c"
+-// #include "../../src/scanner.c"
++// #include "tree-sitter-cpp.h"
