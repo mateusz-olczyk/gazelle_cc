@@ -14,9 +14,3 @@ go_library(
         "@gazelle//rule",
     ],
 )
-
-alias(
-    name = "go_default_library",
-    actual = ":test_filegroup",
-    visibility = ["//:__subpackages__"],
-)

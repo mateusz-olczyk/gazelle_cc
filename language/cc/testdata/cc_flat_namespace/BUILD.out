@@ -1,8 +1,9 @@
-# gazelle:cc_flat_namespace true
 load("@rules_cc//cc:defs.bzl", "cc_library")
 
+# gazelle:cc_flat_namespace true
+
 cc_library(
-    name = "library",
+    name = "cc_flat_namespace",
     srcs = ["library.cc"],
     hdrs = ["library.h"],
     includes = ["."],
