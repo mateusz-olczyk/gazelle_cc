@@ -48,12 +48,16 @@ type (
 		// Set of missing bazel_dep modules referenced in includes but not defined
 		// Used for deduplication of missing modul_dep warnings
 		notFoundBzlModDeps collections.Set[string]
+		// Set of include paths already warned as unresolved; at most one
+		// warning per path
+		warnedUnresolvedIncludePaths collections.Set[string]
 		// Set of relative paths to directories that already have build files or
 		// will have build files populated by rules from this extension or
 		// others that ran earlier. Populated by Configure (called in pre-order)
 		// and GenerateRules (called in post-order but maybe not recursively).
 		buildFileDirRels collections.Set[string]
-		// List of collected errors, reported together at once after the dependency resolution
+		// List of collected errors, reported together at once after the
+		// dependency resolution
 		collectedErrors []error
 	}
 	ccInclude struct {
@@ -99,9 +103,10 @@ func (imports ccImports) allIncludes() []ccInclude {
 
 func NewLanguage() language.Language {
 	return &ccLanguage{
-		bzlmodBuiltInIndex: loadBuiltInBzlModDependenciesIndex(),
-		notFoundBzlModDeps: make(collections.Set[string]),
-		buildFileDirRels:   make(collections.Set[string]),
+		bzlmodBuiltInIndex:           loadBuiltInBzlModDependenciesIndex(),
+		notFoundBzlModDeps:           make(collections.Set[string]),
+		warnedUnresolvedIncludePaths: make(collections.Set[string]),
+		buildFileDirRels:             make(collections.Set[string]),
 	}
 }
 

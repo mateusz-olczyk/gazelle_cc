@@ -56,6 +56,7 @@ use_repo(
     "compilation_test_cc_unresolved_deps_error",
     "compilation_test_cc_unresolved_deps_ignore",
     "compilation_test_cc_unresolved_deps_warn",
+    "compilation_test_cc_unresolved_deps_warn_dedup",
     "compilation_test_cycle-in-existing-units",
     "compilation_test_cycle-in-existing-units_no_merge",
     "compilation_test_deps_external",

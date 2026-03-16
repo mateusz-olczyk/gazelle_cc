@@ -1,0 +1,1 @@
+gazelle: //subdir:main: could not find a library providing header - '#include "header.h"' at subdir/main.cc:1
