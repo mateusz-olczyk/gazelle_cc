@@ -195,9 +195,9 @@ func (lang *ccLanguage) handleIncludeResolutionError(
 		// Warn about unresolved non-system include directives, at most once per
 		// path
 		if !include.isSystemInclude {
-			rootRelativePath := filepath.Join(include.sourceDirectory(), include.path)
-			if !lang.warnedUnresolvedIncludePaths.Contains(rootRelativePath) {
-				lang.warnedUnresolvedIncludePaths.Add(rootRelativePath)
+			includeFileName := filepath.Base(include.path)
+			if !lang.warnedUnresolvedIncludePaths.Contains(includeFileName) {
+				lang.warnedUnresolvedIncludePaths.Add(includeFileName)
 				lang.handleReportedError(getCcConfig(c).unresolvedDepsMode, err)
 			}
 		}
