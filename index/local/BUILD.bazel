@@ -10,6 +10,7 @@ go_library(
         "//language/cc",
         "@gazelle//config",
         "@gazelle//label",
+        "@gazelle//resolve",
         "@gazelle//walk",
     ],
 )

@@ -26,6 +26,7 @@ import (
 	"github.com/EngFlow/gazelle_cc/language/cc"
 	"github.com/bazelbuild/bazel-gazelle/config"
 	"github.com/bazelbuild/bazel-gazelle/label"
+	"github.com/bazelbuild/bazel-gazelle/resolve"
 	"github.com/bazelbuild/bazel-gazelle/walk"
 )
 
@@ -40,20 +41,35 @@ Flags:
 )
 
 func main() {
-	repoName := flag.String("repo_name", "", "repository name for generated labels")
+	workspacePath, outputPath, repoName := parseFlags()
+	workspaceAbs := resolveWorkspace(workspacePath)
+	depIndex, err := buildDependencyIndex(workspaceAbs, repoName)
+	if err != nil {
+		log.Fatalf("walk: %v", err)
+	}
+	if err := writeIndex(outputPath, depIndex); err != nil {
+		log.Fatalf("write output: %v", err)
+	}
+}
+
+func parseFlags() (workspacePath, outputPath, repoName string) {
+	repoNamePtr := flag.String("repo_name", "", "repository name for generated labels")
 	flag.Usage = func() {
 		os.Stderr.WriteString(usage)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
+	repoName = *repoNamePtr
 
 	args := flag.Args()
 	if len(args) != 2 {
 		flag.Usage()
 		log.Fatalf("expected 2 positional arguments (workspace_path, output_json_path), got %d", len(args))
 	}
-	workspacePath, outputPath := args[0], args[1]
+	return args[0], args[1], repoName
+}
 
+func resolveWorkspace(workspacePath string) string {
 	workspaceAbs, err := filepath.Abs(workspacePath)
 	if err != nil {
 		log.Fatalf("workspace path: %v", err)
@@ -61,16 +77,15 @@ func main() {
 	if err := validateWorkspace(workspaceAbs); err != nil {
 		log.Fatalf("workspace: %v", err)
 	}
+	return workspaceAbs
+}
 
-	cfg := newConfig(workspaceAbs, *repoName)
-	walkCfg := &walk.Configurer{}
-	fs := flag.NewFlagSet("local", flag.ContinueOnError)
-	walkCfg.RegisterFlags(fs, "fix", cfg)
-	if err := walkCfg.CheckFlags(fs, cfg); err != nil {
-		log.Fatalf("walk config: %v", err)
+func buildDependencyIndex(workspaceAbs, repoName string) (index.DependencyIndex, error) {
+	cfg := newConfig(workspaceAbs, repoName)
+	walkCfg, cexts, ccLang := setupWalkExtensions(cfg)
+	if err := checkWalkFlags(walkCfg, cfg); err != nil {
+		return nil, err
 	}
-	ccLang := cc.NewLanguage()
-	cexts := []config.Configurer{walkCfg, ccLang.(config.Configurer)}
 
 	depIndex := make(index.DependencyIndex)
 	wf := func(args walk.Walk2FuncArgs) walk.Walk2FuncResult {
@@ -92,19 +107,33 @@ func main() {
 	}
 
 	if err := walk.Walk2(cfg, cexts, []string{workspaceAbs}, walk.VisitAllUpdateSubdirsMode, wf); err != nil {
-		log.Fatalf("walk: %v", err)
+		return nil, err
 	}
+	return depIndex, nil
+}
 
+func setupWalkExtensions(cfg *config.Config) (*walk.Configurer, []config.Configurer, resolve.Resolver) {
+	walkCfg := &walk.Configurer{}
+	ccLang := cc.NewLanguage()
+	cexts := []config.Configurer{walkCfg, ccLang.(config.Configurer)}
+	return walkCfg, cexts, ccLang
+}
+
+func checkWalkFlags(walkCfg *walk.Configurer, cfg *config.Config) error {
+	fs := flag.NewFlagSet("local", flag.ContinueOnError)
+	walkCfg.RegisterFlags(fs, "fix", cfg)
+	return walkCfg.CheckFlags(fs, cfg)
+}
+
+func writeIndex(outputPath string, depIndex index.DependencyIndex) error {
 	data, err := json.MarshalIndent(depIndex, "", "  ")
 	if err != nil {
-		log.Fatalf("marshal index: %v", err)
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		log.Fatalf("create output dir: %v", err)
+		return err
 	}
-	if err := os.WriteFile(outputPath, data, 0644); err != nil {
-		log.Fatalf("write output: %v", err)
-	}
+	return os.WriteFile(outputPath, data, 0644)
 }
 
 func validateWorkspace(dir string) error {
