@@ -2,6 +2,17 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "bazel: build debuggable gazelle_cc for testing",
+      "type": "process",
+      "command": "bazel",
+      "args": [
+        "build",
+        "--compilation_mode=dbg",
+        "//language/cc/testdata:gazelle_for_testing"
+      ],
+      "group": "build"
+    },
+    {
       "label": "bazel: build debuggable gazelle_cc in example/bzlmod",
       "type": "process",
       "command": "bazel",
