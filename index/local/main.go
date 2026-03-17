@@ -41,7 +41,7 @@ Flags:
 )
 
 func main() {
-	workspacePath, outputPath, repoName := parseFlags()
+	workspacePath, outputPath, repoName := parseArgs()
 	workspaceAbs := resolveWorkspace(workspacePath)
 	depIndex, err := buildDependencyIndex(workspaceAbs, repoName)
 	if err != nil {
@@ -52,7 +52,7 @@ func main() {
 	}
 }
 
-func parseFlags() (workspacePath, outputPath, repoName string) {
+func parseArgs() (workspacePath, outputPath, repoName string) {
 	repoNamePtr := flag.String("repo_name", "", "repository name for generated labels")
 	flag.Usage = func() {
 		os.Stderr.WriteString(usage)
@@ -82,8 +82,8 @@ func resolveWorkspace(workspacePath string) string {
 
 func buildDependencyIndex(workspaceAbs, repoName string) (index.DependencyIndex, error) {
 	cfg := newConfig(workspaceAbs, repoName)
-	walkCfg, cexts, ccLang := setupWalkExtensions(cfg)
-	if err := checkWalkFlags(walkCfg, cfg); err != nil {
+	cexts, ccLang, err := setupWalkAndCheckFlags(cfg)
+	if err != nil {
 		return nil, err
 	}
 
@@ -112,17 +112,21 @@ func buildDependencyIndex(workspaceAbs, repoName string) (index.DependencyIndex,
 	return depIndex, nil
 }
 
-func setupWalkExtensions(cfg *config.Config) (*walk.Configurer, []config.Configurer, resolve.Resolver) {
+func setupWalkAndCheckFlags(cfg *config.Config) ([]config.Configurer, resolve.Resolver, error) {
 	walkCfg := &walk.Configurer{}
+	resolveCfg := &resolve.Configurer{}
 	ccLang := cc.NewLanguage()
-	cexts := []config.Configurer{walkCfg, ccLang.(config.Configurer)}
-	return walkCfg, cexts, ccLang
-}
-
-func checkWalkFlags(walkCfg *walk.Configurer, cfg *config.Config) error {
+	cexts := []config.Configurer{walkCfg, resolveCfg, ccLang}
 	fs := flag.NewFlagSet("local", flag.ContinueOnError)
 	walkCfg.RegisterFlags(fs, "fix", cfg)
-	return walkCfg.CheckFlags(fs, cfg)
+	resolveCfg.RegisterFlags(fs, "fix", cfg)
+	if err := walkCfg.CheckFlags(fs, cfg); err != nil {
+		return nil, nil, err
+	}
+	if err := resolveCfg.CheckFlags(fs, cfg); err != nil {
+		return nil, nil, err
+	}
+	return cexts, ccLang, nil
 }
 
 func writeIndex(outputPath string, depIndex index.DependencyIndex) error {
