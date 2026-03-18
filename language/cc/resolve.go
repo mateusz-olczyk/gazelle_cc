@@ -359,8 +359,8 @@ func resolveAmbiguousDependency(
 
 // Tries to resolve given importSpec, looking for an external rule other than the source "from" label, using the following strategies:
 //  1. Using gazelle:resolve override if defined.
-//  2. Using imports registered in Imports.
-//  3. Using dependency indexes defined by gazelle:cc_indexfile.
+//  2. Using dependency indexes defined by gazelle:cc_indexfile.
+//  3. Using imports registered in Imports.
 //  4. Using built-in bzlmod index if enabled by gazelle:cc_use_builtin_bzlmod_index.
 //
 // Returns the resolved label, optionally with a wrapped one of 'err*' errors.
@@ -373,9 +373,15 @@ func (lang *ccLanguage) resolveImportSpec(
 	importSpec resolve.ImportSpec,
 	include ccInclude) (label.Label, error) {
 	conf := getCcConfig(c)
-	// Resolve the gazele:resolve overrides if defined
+	// Resolve the gazelle:resolve overrides if defined
 	if resolvedLabel, ok := resolve.FindRuleWithOverride(c, importSpec, languageName); ok {
 		return resolvedLabel, nil
+	}
+
+	for _, index := range conf.dependencyIndexes {
+		if resolvedDeps, exists := index[importSpec.Imp]; exists {
+			return resolveAmbiguousDependency(resolvedDeps, conf.ambiguousDepsMode, r, from, include)
+		}
 	}
 
 	// Resolve using imports registered in Imports
@@ -389,12 +395,6 @@ func (lang *ccLanguage) resolveImportSpec(
 
 		resolvedDeps := collections.MapSlice(importedRules, func(r resolve.FindResult) label.Label { return r.Label })
 		return resolveAmbiguousDependency(resolvedDeps, conf.ambiguousDepsMode, r, from, include)
-	}
-
-	for _, index := range conf.dependencyIndexes {
-		if resolvedDeps, exists := index[importSpec.Imp]; exists {
-			return resolveAmbiguousDependency(resolvedDeps, conf.ambiguousDepsMode, r, from, include)
-		}
 	}
 
 	if conf.useBuiltinBzlmodIndex {
