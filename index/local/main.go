@@ -126,13 +126,18 @@ func indexBazelPackage(args walk.Walk2FuncArgs, lang language.Language) index.De
 }
 
 func setupWalkAndCheckFlags(cfg *config.Config) ([]config.Configurer, language.Language, error) {
+	commonCfg := &config.CommonConfigurer{}
 	walkCfg := &walk.Configurer{}
 	resolveCfg := &resolve.Configurer{}
 	ccLang := cc.NewLanguage()
-	cexts := []config.Configurer{walkCfg, resolveCfg, ccLang}
+	cexts := []config.Configurer{commonCfg, walkCfg, resolveCfg, ccLang}
 	fs := flag.NewFlagSet("local", flag.ContinueOnError)
+	commonCfg.RegisterFlags(fs, "fix", cfg)
 	walkCfg.RegisterFlags(fs, "fix", cfg)
 	resolveCfg.RegisterFlags(fs, "fix", cfg)
+	if err := commonCfg.CheckFlags(fs, cfg); err != nil {
+		return nil, nil, err
+	}
 	if err := walkCfg.CheckFlags(fs, cfg); err != nil {
 		return nil, nil, err
 	}
