@@ -16,7 +16,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"flag"
 	"log"
 	"os"
@@ -31,19 +30,23 @@ import (
 	"github.com/bazelbuild/bazel-gazelle/walk"
 )
 
-const usage = `Usage: local_index [flags] <workspace_path>
+const (
+	cmd         = "local"
+	gazelle_cmd = "fix"
+	usage       = `Usage: ` + cmd + ` [flags] <workspace_path>
 
 Walks the Bazel workspace at workspace_path, parses BUILD files, and writes a
 DependencyIndex JSON file for use with the gazelle:cc_indexfile directive.
 By default the index is written to output.json in the current working directory.
 
 Flags:
-`
+` + ``
+)
 
 func main() {
-	workspacePath, outputPath, repoName := parseArgs()
-	workspaceAbs := resolveWorkspace(workspacePath)
-	depIndex, err := buildDependencyIndex(workspaceAbs, repoName)
+	outputPath, cfg, cexts, ccLang := parseArgs()
+
+	depIndex, err := buildDependencyIndex(cfg, cexts, ccLang)
 	if err != nil {
 		log.Fatalf("walk: %v", err)
 	}
@@ -52,57 +55,68 @@ func main() {
 	}
 }
 
-func parseArgs() (workspacePath, outputPath, repoName string) {
-	outputFlag := flag.String("output", "output.json", "path to write the DependencyIndex JSON file")
-	repoNameFlag := flag.String("repo_name", "", "optional custom repository name for generated labels")
-	flag.Usage = func() {
-		os.Stderr.WriteString(usage)
-		flag.PrintDefaults()
-	}
-	flag.Parse()
+func parseArgs() (
+	outputPath string,
+	cfg *config.Config,
+	cexts []config.Configurer,
+	ccLang language.Language,
+) {
+	cfg = config.New()
+	commonCfg := &config.CommonConfigurer{}
+	walkCfg := &walk.Configurer{}
+	resolveCfg := &resolve.Configurer{}
+	ccLang = cc.NewLanguage()
+	cexts = []config.Configurer{commonCfg, walkCfg, resolveCfg, ccLang}
 
-	args := flag.Args()
+	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
+	fs.SetOutput(os.Stderr)
+	outputFlag := fs.String("output", "output.json", "path to write the DependencyIndex JSON file")
+	repoNameFlag := fs.String("repo_name", "", "optional custom repository name for generated labels")
+	commonCfg.RegisterFlags(fs, gazelle_cmd, cfg)
+	walkCfg.RegisterFlags(fs, gazelle_cmd, cfg)
+	resolveCfg.RegisterFlags(fs, gazelle_cmd, cfg)
+	fs.Usage = func() {
+		os.Stderr.WriteString(usage)
+		fs.PrintDefaults()
+	}
+	fs.Parse(os.Args[1:])
+
+	args := fs.Args()
 	if len(args) != 1 {
-		flag.Usage()
+		fs.Usage()
 		log.Fatalf("expected 1 positional argument (workspace_path), got %d", len(args))
 	}
+	cfg.WorkDir = args[0]
 
-	workspacePath = args[0]
-	outputPath = *outputFlag
-	repoName = *repoNameFlag
-	return
+	if err := commonCfg.CheckFlags(fs, cfg); err != nil {
+		log.Fatalf("flags: %v", err)
+	}
+	if err := walkCfg.CheckFlags(fs, cfg); err != nil {
+		log.Fatalf("flags: %v", err)
+	}
+	if err := resolveCfg.CheckFlags(fs, cfg); err != nil {
+		log.Fatalf("flags: %v", err)
+	}
+
+	if *repoNameFlag != "" {
+		cfg.RepoName = *repoNameFlag
+	}
+
+	return *outputFlag, cfg, cexts, ccLang
 }
 
-func resolveWorkspace(workspacePath string) string {
-	workspaceAbs, err := filepath.Abs(workspacePath)
-	if err != nil {
-		log.Fatalf("workspace path: %v", err)
-	}
-	if err := validateWorkspace(workspaceAbs); err != nil {
-		log.Fatalf("workspace: %v", err)
-	}
-	return workspaceAbs
-}
-
-func buildDependencyIndex(workspaceAbs, repoName string) (index.DependencyIndex, error) {
-	cfg := config.New()
-	cexts, ccLang, err := setupWalkAndCheckFlags(cfg)
-	if err != nil {
-		return nil, err
-	}
-	cfg.WorkDir = workspaceAbs
-	cfg.RepoRoot = workspaceAbs
-	if repoName != "" {
-		cfg.RepoName = repoName
-	}
-
+func buildDependencyIndex(
+	cfg *config.Config,
+	cexts []config.Configurer,
+	ccLang language.Language,
+) (index.DependencyIndex, error) {
 	var depIndex index.DependencyIndex
 	wf := func(args walk.Walk2FuncArgs) walk.Walk2FuncResult {
 		depIndex.Merge(indexBazelPackage(args, ccLang))
 		return walk.Walk2FuncResult{}
 	}
 
-	if err := walk.Walk2(cfg, cexts, []string{workspaceAbs}, walk.VisitAllUpdateSubdirsMode, wf); err != nil {
+	if err := walk.Walk2(cfg, cexts, []string{cfg.RepoRoot}, walk.VisitAllUpdateSubdirsMode, wf); err != nil {
 		return nil, err
 	}
 	return depIndex, nil
@@ -127,28 +141,6 @@ func indexBazelPackage(args walk.Walk2FuncArgs, lang language.Language) index.De
 	return out
 }
 
-func setupWalkAndCheckFlags(cfg *config.Config) ([]config.Configurer, language.Language, error) {
-	commonCfg := &config.CommonConfigurer{}
-	walkCfg := &walk.Configurer{}
-	resolveCfg := &resolve.Configurer{}
-	ccLang := cc.NewLanguage()
-	cexts := []config.Configurer{commonCfg, walkCfg, resolveCfg, ccLang}
-	fs := flag.NewFlagSet("local", flag.ContinueOnError)
-	commonCfg.RegisterFlags(fs, "fix", cfg)
-	walkCfg.RegisterFlags(fs, "fix", cfg)
-	resolveCfg.RegisterFlags(fs, "fix", cfg)
-	if err := commonCfg.CheckFlags(fs, cfg); err != nil {
-		return nil, nil, err
-	}
-	if err := walkCfg.CheckFlags(fs, cfg); err != nil {
-		return nil, nil, err
-	}
-	if err := resolveCfg.CheckFlags(fs, cfg); err != nil {
-		return nil, nil, err
-	}
-	return cexts, ccLang, nil
-}
-
 func writeIndex(outputPath string, depIndex index.DependencyIndex) error {
 	data, err := json.MarshalIndent(depIndex, "", "  ")
 	if err != nil {
@@ -158,25 +150,4 @@ func writeIndex(outputPath string, depIndex index.DependencyIndex) error {
 		return err
 	}
 	return os.WriteFile(outputPath, data, 0644)
-}
-
-func validateWorkspace(dir string) error {
-	info, err := os.Stat(dir)
-	if err != nil {
-		return err
-	}
-	if !info.IsDir() {
-		return os.ErrNotExist
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return err
-	}
-	for _, e := range entries {
-		name := e.Name()
-		if name == "WORKSPACE" || name == "WORKSPACE.bazel" || name == "MODULE.bazel" {
-			return nil
-		}
-	}
-	return errors.New("workspace root must contain WORKSPACE, WORKSPACE.bazel, or MODULE.bazel")
 }
