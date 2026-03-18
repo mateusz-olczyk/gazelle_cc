@@ -33,11 +33,12 @@ import (
 const (
 	cmd         = "local"
 	gazelle_cmd = "fix"
-	usage       = `Usage: ` + cmd + ` [flags] <workspace_path>
+	usage       = `Usage: ` + cmd + ` [flags]
 
-Walks the Bazel workspace at workspace_path, parses BUILD files, and writes a
-DependencyIndex JSON file for use with the gazelle:cc_indexfile directive.
-By default the index is written to output.json in the current working directory.
+Walks the Bazel workspace (current directory and repo root follow gazelle
+flags, e.g. -repo_root), parses BUILD files, and writes a DependencyIndex JSON
+file for use with the gazelle:cc_indexfile directive. By default the index is
+written to output.json in the current working directory.
 
 Flags:
 ` + ``
@@ -68,6 +69,12 @@ func parseArgs() (
 	ccLang = cc.NewLanguage()
 	cexts = []config.Configurer{commonCfg, walkCfg, resolveCfg, ccLang}
 
+	wd, err := os.Getwd()
+	if err != nil {
+		log.Fatal(err)
+	}
+	cfg.WorkDir = wd
+
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	fs.SetOutput(os.Stderr)
 	outputFlag := fs.String("output", "output.json", "path to write the DependencyIndex JSON file")
@@ -79,15 +86,11 @@ func parseArgs() (
 		os.Stderr.WriteString(usage)
 		fs.PrintDefaults()
 	}
+
 	fs.Parse(os.Args[1:])
-
-	args := fs.Args()
-	if len(args) != 1 {
-		fs.Usage()
-		log.Fatalf("expected 1 positional argument (workspace_path), got %d", len(args))
+	if args := fs.Args(); len(args) > 0 {
+		log.Fatalf("unexpected positional argument(s): %q", args)
 	}
-	cfg.WorkDir = args[0]
-
 	if err := commonCfg.CheckFlags(fs, cfg); err != nil {
 		log.Fatalf("flags: %v", err)
 	}
@@ -97,7 +100,6 @@ func parseArgs() (
 	if err := resolveCfg.CheckFlags(fs, cfg); err != nil {
 		log.Fatalf("flags: %v", err)
 	}
-
 	if *repoNameFlag != "" {
 		cfg.RepoName = *repoNameFlag
 	}
