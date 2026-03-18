@@ -54,7 +54,7 @@ func main() {
 
 func parseArgs() (workspacePath, outputPath, repoName string) {
 	outputFlag := flag.String("output", "output.json", "path to write the DependencyIndex JSON file")
-	repoNameFlag := flag.String("repo_name", "", "repository name for generated labels")
+	repoNameFlag := flag.String("repo_name", "", "optional custom repository name for generated labels")
 	flag.Usage = func() {
 		os.Stderr.WriteString(usage)
 		flag.PrintDefaults()
@@ -85,10 +85,15 @@ func resolveWorkspace(workspacePath string) string {
 }
 
 func buildDependencyIndex(workspaceAbs, repoName string) (index.DependencyIndex, error) {
-	cfg := newConfig(workspaceAbs, repoName)
+	cfg := config.New()
 	cexts, ccLang, err := setupWalkAndCheckFlags(cfg)
 	if err != nil {
 		return nil, err
+	}
+	cfg.WorkDir = workspaceAbs
+	cfg.RepoRoot = workspaceAbs
+	if repoName != "" {
+		cfg.RepoName = repoName
 	}
 
 	var depIndex index.DependencyIndex
@@ -99,9 +104,6 @@ func buildDependencyIndex(workspaceAbs, repoName string) (index.DependencyIndex,
 
 	if err := walk.Walk2(cfg, cexts, []string{workspaceAbs}, walk.VisitAllUpdateSubdirsMode, wf); err != nil {
 		return nil, err
-	}
-	if depIndex == nil {
-		depIndex = make(index.DependencyIndex)
 	}
 	return depIndex, nil
 }
@@ -177,12 +179,4 @@ func validateWorkspace(dir string) error {
 		}
 	}
 	return errors.New("workspace root must contain WORKSPACE, WORKSPACE.bazel, or MODULE.bazel")
-}
-
-func newConfig(repoRoot, repoName string) *config.Config {
-	c := config.New()
-	c.RepoRoot = repoRoot
-	c.WorkDir = repoRoot
-	c.RepoName = repoName
-	return c
 }
