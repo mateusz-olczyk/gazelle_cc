@@ -26,6 +26,7 @@ import (
 	"github.com/EngFlow/gazelle_cc/language/cc"
 	"github.com/bazelbuild/bazel-gazelle/config"
 	"github.com/bazelbuild/bazel-gazelle/label"
+	"github.com/bazelbuild/bazel-gazelle/language"
 	"github.com/bazelbuild/bazel-gazelle/resolve"
 	"github.com/bazelbuild/bazel-gazelle/walk"
 )
@@ -90,32 +91,41 @@ func buildDependencyIndex(workspaceAbs, repoName string) (index.DependencyIndex,
 		return nil, err
 	}
 
-	depIndex := make(index.DependencyIndex)
+	var depIndex index.DependencyIndex
 	wf := func(args walk.Walk2FuncArgs) walk.Walk2FuncResult {
-		if args.File == nil {
-			return walk.Walk2FuncResult{}
-		}
-		for _, r := range args.File.Rules {
-			specs := ccLang.Imports(args.Config, r, args.File)
-			for _, spec := range specs {
-				lbl := label.Label{
-					Repo: args.Config.RepoName,
-					Pkg:  args.File.Pkg,
-					Name: r.Name(),
-				}
-				depIndex[spec.Imp] = append(depIndex[spec.Imp], lbl)
-			}
-		}
+		depIndex.Merge(indexBazelPackage(args, ccLang))
 		return walk.Walk2FuncResult{}
 	}
 
 	if err := walk.Walk2(cfg, cexts, []string{workspaceAbs}, walk.VisitAllUpdateSubdirsMode, wf); err != nil {
 		return nil, err
 	}
+	if depIndex == nil {
+		depIndex = make(index.DependencyIndex)
+	}
 	return depIndex, nil
 }
 
-func setupWalkAndCheckFlags(cfg *config.Config) ([]config.Configurer, resolve.Resolver, error) {
+func indexBazelPackage(args walk.Walk2FuncArgs, lang language.Language) index.DependencyIndex {
+	if args.File == nil {
+		return nil
+	}
+	out := make(index.DependencyIndex)
+	for _, r := range args.File.Rules {
+		specs := lang.Imports(args.Config, r, args.File)
+		for _, spec := range specs {
+			lbl := label.Label{
+				Repo: args.Config.RepoName,
+				Pkg:  args.File.Pkg,
+				Name: r.Name(),
+			}
+			out[spec.Imp] = append(out[spec.Imp], lbl)
+		}
+	}
+	return out
+}
+
+func setupWalkAndCheckFlags(cfg *config.Config) ([]config.Configurer, language.Language, error) {
 	walkCfg := &walk.Configurer{}
 	resolveCfg := &resolve.Configurer{}
 	ccLang := cc.NewLanguage()
