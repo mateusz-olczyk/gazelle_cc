@@ -133,6 +133,111 @@ func TestMarshalUnmarshalJSON(t *testing.T) {
 	assert.Equal(t, input, output)
 }
 
+func TestMerge(t *testing.T) {
+	l1 := label.New("repo", "pkg", "t1")
+	l2 := label.New("repo", "pkg", "t2")
+	l3 := label.New("repo", "pkg", "t3")
+
+	testCases := []struct {
+		description string
+		before      DependencyIndex
+		other       DependencyIndex
+		want        DependencyIndex
+	}{
+		{
+			description: "empty other leaves receiver unchanged",
+			before: DependencyIndex{
+				"a.h": {l1},
+			},
+			other: DependencyIndex{},
+			want: DependencyIndex{
+				"a.h": {l1},
+			},
+		},
+		{
+			description: "nil receiver map is allocated and filled from other",
+			before:      nil,
+			other: DependencyIndex{
+				"a.h": {l1, l2},
+			},
+			want: DependencyIndex{
+				"a.h": {l1, l2},
+			},
+		},
+		{
+			description: "disjoint keys accumulate",
+			before: DependencyIndex{
+				"a.h": {l1},
+			},
+			other: DependencyIndex{
+				"b.h": {l2},
+			},
+			want: DependencyIndex{
+				"a.h": {l1},
+				"b.h": {l2},
+			},
+		},
+		{
+			description: "same key unions labels receiver first then new from other",
+			before: DependencyIndex{
+				"a.h": {l1},
+			},
+			other: DependencyIndex{
+				"a.h": {l2, l1},
+			},
+			want: DependencyIndex{
+				"a.h": {l1, l2},
+			},
+		},
+		{
+			description: "duplicate labels in other are not repeated",
+			before: DependencyIndex{
+				"a.h": {l1},
+			},
+			other: DependencyIndex{
+				"a.h": {l2, l2, l3},
+			},
+			want: DependencyIndex{
+				"a.h": {l1, l2, l3},
+			},
+		},
+		{
+			description: "other entry with empty label slice is skipped",
+			before: DependencyIndex{
+				"a.h": {l1},
+			},
+			other: DependencyIndex{
+				"b.h": {},
+				"c.h": {l2},
+			},
+			want: DependencyIndex{
+				"a.h": {l1},
+				"c.h": {l2},
+			},
+		},
+		{
+			description: "empty slice for existing key does not clear receiver",
+			before: DependencyIndex{
+				"a.h": {l1},
+			},
+			other: DependencyIndex{
+				"a.h": {},
+			},
+			want: DependencyIndex{
+				"a.h": {l1},
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.description, func(t *testing.T) {
+			idx := tc.before
+			(&idx).Merge(tc.other)
+			assert.Equal(t, tc.want, idx)
+		})
+	}
+}
+
 func ExampleDependencyIndex_MarshalJSON() {
 	index := DependencyIndex{
 		"header.h": {

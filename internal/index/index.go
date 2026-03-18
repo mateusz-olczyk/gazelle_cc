@@ -20,6 +20,7 @@ package index
 import (
 	"encoding"
 	"encoding/json"
+	"slices"
 
 	"github.com/EngFlow/gazelle_cc/internal/collections"
 	"github.com/bazelbuild/bazel-gazelle/label"
@@ -66,4 +67,35 @@ func (index *DependencyIndex) UnmarshalJSON(data []byte) error {
 		(*index)[header] = collections.MapSlice(labels, func(lbl labelUnmarshaler) label.Label { return label.Label(lbl) })
 	}
 	return nil
+}
+
+// Merge adds every header path mapping from other into the receiver. Labels for
+// a path already present are unioned; order is receiver first, then unseen
+// labels from other in order.
+func (idx *DependencyIndex) Merge(other DependencyIndex) {
+	if len(other) == 0 {
+		return
+	}
+	if *idx == nil {
+		*idx = make(DependencyIndex)
+	}
+	for header, added := range other {
+		if len(added) == 0 {
+			continue
+		}
+		cur := (*idx)[header]
+		if len(cur) == 0 {
+			(*idx)[header] = slices.Clone(added)
+			continue
+		}
+		seen := collections.ToSet(cur)
+		cur = slices.Grow(cur, len(added))
+		for _, lbl := range added {
+			if !seen.Contains(lbl) {
+				cur = append(cur, lbl)
+				seen.Add(lbl)
+			}
+		}
+		(*idx)[header] = cur
+	}
 }
