@@ -17,6 +17,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -40,24 +41,28 @@ flags, e.g. -repo_root), parses BUILD files, and writes a DependencyIndex JSON
 file for use with the gazelle:cc_indexfile directive. By default the index is
 written to output.json in the current working directory.
 
+With -append, an existing output file is read first and the new index is
+merged into it (union of header paths and labels).
+
 Flags:
-` + ``
+`
 )
 
 func main() {
-	outputPath, cfg, cexts, ccLang := parseArgs()
+	outputPath, appendMode, cfg, cexts, ccLang := parseArgs()
 
 	depIndex, err := buildDependencyIndex(cfg, cexts, ccLang)
 	if err != nil {
 		log.Fatalf("walk: %v", err)
 	}
-	if err := writeIndex(outputPath, depIndex); err != nil {
+	if err := writeIndex(outputPath, depIndex, appendMode); err != nil {
 		log.Fatalf("write output: %v", err)
 	}
 }
 
 func parseArgs() (
 	outputPath string,
+	appendMode bool,
 	cfg *config.Config,
 	cexts []config.Configurer,
 	ccLang language.Language,
@@ -78,6 +83,7 @@ func parseArgs() (
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	fs.SetOutput(os.Stderr)
 	outputFlag := fs.String("output", "output.json", "path to write the DependencyIndex JSON file")
+	appendFlag := fs.Bool("append", false, "merge into existing output file if present")
 	repoNameFlag := fs.String("repo_name", "", "optional custom repository name for generated labels")
 	commonCfg.RegisterFlags(fs, gazelle_cmd, cfg)
 	walkCfg.RegisterFlags(fs, gazelle_cmd, cfg)
@@ -104,7 +110,7 @@ func parseArgs() (
 		cfg.RepoName = *repoNameFlag
 	}
 
-	return *outputFlag, cfg, cexts, ccLang
+	return *outputFlag, *appendFlag, cfg, cexts, ccLang
 }
 
 func buildDependencyIndex(
@@ -143,8 +149,25 @@ func indexBazelPackage(args walk.Walk2FuncArgs, lang language.Language) index.De
 	return out
 }
 
-func writeIndex(outputPath string, depIndex index.DependencyIndex) error {
-	data, err := json.MarshalIndent(depIndex, "", "  ")
+func writeIndex(outputPath string, depIndex index.DependencyIndex, appendMode bool) error {
+	out := depIndex
+	if appendMode {
+		data, err := os.ReadFile(outputPath)
+		switch {
+		case err == nil:
+			var existing index.DependencyIndex
+			if err := json.Unmarshal(data, &existing); err != nil {
+				return fmt.Errorf("parse existing index %q: %w", outputPath, err)
+			}
+			existing.Merge(depIndex)
+			out = existing
+		case os.IsNotExist(err):
+			// nothing to merge
+		default:
+			return err
+		}
+	}
+	data, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return err
 	}
