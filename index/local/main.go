@@ -30,15 +30,14 @@ import (
 	"github.com/bazelbuild/bazel-gazelle/walk"
 )
 
-const (
-	usage = `Usage: local_index [flags] <workspace_path> <output_json_path>
+const usage = `Usage: local_index [flags] <workspace_path>
 
 Walks the Bazel workspace at workspace_path, parses BUILD files, and writes a
-DependencyIndex JSON file to output_json_path for use with the gazelle:cc_indexfile directive.
+DependencyIndex JSON file for use with the gazelle:cc_indexfile directive.
+By default the index is written to output.json in the current working directory.
 
 Flags:
 `
-)
 
 func main() {
 	workspacePath, outputPath, repoName := parseArgs()
@@ -53,20 +52,24 @@ func main() {
 }
 
 func parseArgs() (workspacePath, outputPath, repoName string) {
-	repoNamePtr := flag.String("repo_name", "", "repository name for generated labels")
+	outputFlag := flag.String("output", "output.json", "path to write the DependencyIndex JSON file")
+	repoNameFlag := flag.String("repo_name", "", "repository name for generated labels")
 	flag.Usage = func() {
 		os.Stderr.WriteString(usage)
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-	repoName = *repoNamePtr
 
 	args := flag.Args()
-	if len(args) != 2 {
+	if len(args) != 1 {
 		flag.Usage()
-		log.Fatalf("expected 2 positional arguments (workspace_path, output_json_path), got %d", len(args))
+		log.Fatalf("expected 1 positional argument (workspace_path), got %d", len(args))
 	}
-	return args[0], args[1], repoName
+
+	workspacePath = args[0]
+	outputPath = *outputFlag
+	repoName = *repoNameFlag
+	return
 }
 
 func resolveWorkspace(workspacePath string) string {
